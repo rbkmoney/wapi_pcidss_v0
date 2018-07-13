@@ -1,5 +1,5 @@
 {application, wapi , [
-    {description, "A service that does something"},
+    {description, "Wallet API service adapter"},
     {vsn, "0.1.0"},
     {registered, []},
     {mod, {wapi , []}},
@@ -11,8 +11,11 @@
         lager_logstash_formatter,
         genlib,
         woody,
-        %%capi_woody_client,
+        scoper,
         dmsl,
+        %% swag_server_wallet,
+        swag_server_payres,
+        swag_server_privdoc,
         jose,
         cowboy_cors,
         cowboy_access_log,
@@ -20,11 +23,9 @@
         base64url,
         snowflake,
         woody_user_identity,
-        payproc_errors,
+        %% payproc_errors,
         erl_health,
-        %% TODO: remove as soon as wapi becomes a proper app
-        jsx,
-        jesse
+        identdocstore_proto
     ]},
     {env, []}
 ]}.

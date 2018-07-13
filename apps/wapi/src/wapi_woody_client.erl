@@ -6,6 +6,7 @@
 -export([get_service_modname/1]).
 
 %%
+-define(APP, wapi).
 
 -type service_name() :: atom().
 
@@ -13,7 +14,7 @@
     woody:result().
 
 call_service(ServiceName, Function, Args, Context) ->
-    call_service(ServiceName, Function, Args, Context, capi_woody_event_handler).
+    call_service(ServiceName, Function, Args, Context, scoper_woody_event_handler).
 
 -spec call_service(service_name(), woody:func(), [term()], woody_context:ctx(), woody:ev_handler()) ->
     woody:result().
@@ -27,11 +28,14 @@ get_service_spec(ServiceName) ->
     {get_service_url(ServiceName), get_service_modname(ServiceName)}.
 
 get_service_url(ServiceName) ->
-    maps:get(ServiceName, genlib_app:env(?MODULE, service_urls)).
+    maps:get(ServiceName, genlib_app:env(?APP, service_urls)).
 
 -spec get_service_modname(service_name()) -> woody:service().
 
 get_service_modname(cds_storage) ->
-    {dmsl_cds_thrift, 'Storage'}.
+    {dmsl_cds_thrift, 'Storage'};
+get_service_modname(identdoc_storage) ->
+    {identdocstore_identity_document_storage_thrift, 'IdentityDocumentStorage'}.
+
 %% get_service_modname(webhook_manager) ->
 %%     {dmsl_webhooker_thrift, 'WebhookManager'}.

@@ -5,6 +5,7 @@ log
 erl_crash.dump
 .tags*
 *.sublime-*
+.edts
 
 .DS_Store
 
@@ -12,18 +13,9 @@ erl_crash.dump
 /_checkouts/
 
 # generated
-# apps/swag_server/*
-# apps/swag_client/*
-src/swag_wallet_server*.erl
-src/swag_wallet_client*.erl
+apps/swag_*
 
-src/swag_payres_server*.erl
-src/swag_payres_client*.erl
-
-src/swag_privdoc_server*.erl
-src/swag_privdoc_client*.erl
 *.beam
-
 
 # containerization
 \#*

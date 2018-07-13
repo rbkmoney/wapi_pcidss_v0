@@ -19,7 +19,7 @@ SERVICE_IMAGE_PUSH_TAG ?= $(SERVICE_IMAGE_TAG)
 BASE_IMAGE_NAME := service_erlang
 BASE_IMAGE_TAG := 16e2b3ef17e5fdefac8554ced9c2c74e5c6e9e11
 
-BUILD_IMAGE_TAG := 562313697353c29d4b34fb081a8b70e8c2207134
+BUILD_IMAGE_TAG := 585ec439a97bade30cfcebc36cefdb45f13f3372
 
 CALL_ANYWHERE := \
 	submodules \
@@ -43,9 +43,9 @@ $(SUBTARGETS): %/.git: %
 
 submodules: $(SUBTARGETS)
 
-generate: swag_server.generate #swag_client.generate
+generate: swag_server.generate swag_client.generate
 
-regenerate: swag_server.regenerate #swag_client.regenerate
+regenerate: swag_server.regenerate swag_client.regenerate
 
 compile: submodules generate
 	$(REBAR) compile
@@ -65,7 +65,7 @@ start: submodules
 devrel: submodules
 	$(REBAR) release
 
-release: submodules distclean generate
+release: submodules generate
 	$(REBAR) as prod release
 
 clean:
@@ -83,129 +83,60 @@ cover:
 test: submodules generate
 	$(REBAR) do eunit, ct
 
-# Swagger stuff
 SWAGGER_CODEGEN = $(call which, swagger-codegen)
 SWAGGER_SCHEME_BASE_PATH := schemes/swag
-
-WAPI_SRC = src
-
-$(SWAGGER_SCHEME): $(SWAGGER_SCHEME_BASE_PATH)/.git
+APP_PATH := apps
+SWAGGER_SCHEME_API_PATH := $(SWAGGER_SCHEME_BASE_PATH)/api
+SWAG_SPEC_FILE := swagger.yaml
 
 # Swagger server
 
-# wallet
+SWAG_SERVER_PREFIX := swag_server
+SWAG_SERVER_APP_TARGET := $(APP_PATH)/$(SWAG_SERVER_PREFIX)
+SWAG_SERVER_APP_PATH := $(APP_PATH)/$(SWAG_SERVER_PREFIX)
 
-SWAGGER_SCHEME_WALLET_PATH := $(SWAGGER_SCHEME_BASE_PATH)/api/wallet
-SWAGGER_SCHEME_WALLET := $(SWAGGER_SCHEME_WALLET_PATH)/swagger.yaml
+SWAG_SERVER_APP_TARGET_PAYRES  := $(SWAG_SERVER_APP_PATH)_payres/rebar.config
+SWAG_SERVER_APP_TARGET_PRIVDOC := $(SWAG_SERVER_APP_PATH)_privdoc/rebar.config
 
-SWAG_SERVER_WALLET_PREFIX := swag_wallet_server
-# SWAG_SERVER_APP_PATH := apps/$(SWAG_SERVER_PREFIX)
-SWAG_SERVER_WALLET_APP_PATH := $(SWAG_SERVER_WALLET_PREFIX)
-SWAG_SERVER_WALLET_APP_TARGET := $(SWAG_SERVER_WALLET_APP_PATH)/rebar.config
-
-SWAG_SERVER_WALLET_SRC := $(WAPI_SRC)
-SWAG_SERVER_WALLET_SRC_TARGET := $(SWAG_SERVER_WALLET_SRC)/$(SWAG_SERVER_WALLET_PREFIX).erl
-
-$(SWAG_SERVER_WALLET_SRC_TARGET): $(SWAG_SERVER_WALLET_APP_TARGET)
-	cp $(SWAG_SERVER_WALLET_APP_PATH)/src/*.erl $(SWAG_SERVER_WALLET_SRC)/
-	rm -rf $(SWAG_SERVER_WALLET_APP_PATH)
-
-$(SWAG_SERVER_WALLET_APP_TARGET): $(SWAGGER_SCHEME_WALLET)
+$(SWAG_SERVER_APP_PATH)_%/rebar.config: $(SWAGGER_SCHEME_API_PATH)/$*
 	$(SWAGGER_CODEGEN) generate \
-		-i $(SWAGGER_SCHEME_WALLET) \
+		-i $(SWAGGER_SCHEME_API_PATH)/$*/$(SWAG_SPEC_FILE) \
 		-l erlang-server \
-		-o $(SWAG_SERVER_WALLET_APP_PATH) \
+		-o $(SWAG_SERVER_APP_PATH)_$* \
 		--additional-properties \
-			packageName=$(SWAG_SERVER_WALLET_PREFIX)
+			packageName=$(SWAG_SERVER_PREFIX)_$*
 
-# payres
+swag_server.generate: $(SWAG_SERVER_APP_TARGET_PAYRES) $(SWAG_SERVER_APP_TARGET_PRIVDOC)
 
-SWAGGER_SCHEME_PAYRES_PATH := $(SWAGGER_SCHEME_BASE_PATH)/api/payres
-SWAGGER_SCHEME_PAYRES := $(SWAGGER_SCHEME_PAYRES_PATH)/swagger.yaml
+swag_server.distclean: swag_server.distclean_payres swag_server.distclean_privdoc
 
-
-SWAG_SERVER_PAYRES_PREFIX := swag_payres_server
-# SWAG_SERVER_APP_PATH := apps/$(SWAG_SERVER_PREFIX)
-SWAG_SERVER_PAYRES_APP_PATH := $(SWAG_SERVER_PAYRES_PREFIX)
-SWAG_SERVER_PAYRES_APP_TARGET := $(SWAG_SERVER_PAYRES_APP_PATH)/rebar.config
-
-SWAG_SERVER_PAYRES_SRC := $(WAPI_SRC)
-SWAG_SERVER_PAYRES_SRC_TARGET := $(SWAG_SERVER_PAYRES_SRC)/$(SWAG_SERVER_PAYRES_PREFIX).erl
-
-$(SWAG_SERVER_PAYRES_SRC_TARGET): $(SWAG_SERVER_PAYRES_APP_TARGET)
-	cp $(SWAG_SERVER_PAYRES_APP_PATH)/src/*.erl $(SWAG_SERVER_PAYRES_SRC)/
-	rm -rf $(SWAG_SERVER_PAYRES_APP_PATH)
-
-$(SWAG_SERVER_PAYRES_APP_TARGET): $(SWAGGER_SCHEME_PAYRES)
-	$(SWAGGER_CODEGEN) generate \
-		-i $(SWAGGER_SCHEME_PAYRES) \
-		-l erlang-server \
-		-o $(SWAG_SERVER_PAYRES_APP_PATH) \
-		--additional-properties \
-			packageName=$(SWAG_SERVER_PAYRES_PREFIX)
-
-# privdoc
-
-SWAGGER_SCHEME_PRIVDOC_PATH := $(SWAGGER_SCHEME_BASE_PATH)/api/privdoc
-SWAGGER_SCHEME_PRIVDOC := $(SWAGGER_SCHEME_PRIVDOC_PATH)/swagger.yaml
-
-
-SWAG_SERVER_PRIVDOC_PREFIX := swag_privdoc_server
-# SWAG_SERVER_APP_PATH := apps/$(SWAG_SERVER_PREFIX)
-SWAG_SERVER_PRIVDOC_APP_PATH := $(SWAG_SERVER_PRIVDOC_PREFIX)
-SWAG_SERVER_PRIVDOC_APP_TARGET := $(SWAG_SERVER_PRIVDOC_APP_PATH)/rebar.config
-
-SWAG_SERVER_PRIVDOC_SRC := $(WAPI_SRC)
-SWAG_SERVER_PRIVDOC_SRC_TARGET := $(SWAG_SERVER_PRIVDOC_SRC)/$(SWAG_SERVER_PRIVDOC_PREFIX).erl
-
-$(SWAG_SERVER_PRIVDOC_SRC_TARGET): $(SWAG_SERVER_PRIVDOC_APP_TARGET)
-	cp $(SWAG_SERVER_PRIVDOC_APP_PATH)/src/*.erl $(SWAG_SERVER_PRIVDOC_SRC)/
-	rm -rf $(SWAG_SERVER_PRIVDOC_APP_PATH)
-
-$(SWAG_SERVER_PRIVDOC_APP_TARGET): $(SWAGGER_SCHEME_PRIVDOC)
-	$(SWAGGER_CODEGEN) generate \
-		-i $(SWAGGER_SCHEME_PRIVDOC) \
-		-l erlang-server \
-		-o $(SWAG_SERVER_PRIVDOC_APP_PATH) \
-		--additional-properties \
-			packageName=$(SWAG_SERVER_PRIVDOC_PREFIX)
-
-swag_server.generate: $(SWAG_SERVER_WALLET_SRC_TARGET) $(SWAG_SERVER_PAYRES_SRC_TARGET) $(SWAG_SERVER_PRIVDOC_SRC_TARGET)
-
-swag_server.distclean:
-	rm -rf $(SWAG_SERVER_WALLET_SRC)/$(SWAG_SERVER_WALLET_PREFIX)*.erl
-	rm -rf $(SWAG_SERVER_PAYRES_SRC)/$(SWAG_SERVER_PAYRES_PREFIX)*.erl
-	rm -rf $(SWAG_SERVER_PRIVDOC_SRC)/$(SWAG_SERVER_PRIVDOC_PREFIX)*.erl
+swag_server.distclean_%:
+	rm -rf $(SWAG_SERVER_APP_PATH)_$*
 
 swag_server.regenerate: swag_server.distclean swag_server.generate
 
-# Not in use yet
-
 # Swagger client
-SWAG_CLIENT_PREFIX := swag_wallet_client
-# SWAG_CLIENT_APP_PATH := apps/$(SWAG_CLIENT_PREFIX)
-SWAG_CLIENT_APP_PATH := $(SWAG_CLIENT_PREFIX)
-SWAG_CLIENT_APP_TARGET := $(SWAG_CLIENT_APP_PATH)/rebar.config
 
+SWAG_CLIENT_PREFIX := swag_client
+SWAG_CLIENT_APP_TARGET := $(APP_PATH)/$(SWAG_CLIENT_PREFIX)
+SWAG_CLIENT_APP_PATH := $(APP_PATH)/$(SWAG_CLIENT_PREFIX)
 
-SWAG_CLIENT_SRC := $(WAPI_SRC)
-SWAG_CLIENT_SRC_TARGET := $(SWAG_CLIENT_PREFIX).erl
+SWAG_CLIENT_APP_TARGET_PAYRES  := $(SWAG_CLIENT_APP_PATH)_payres/rebar.config
+SWAG_CLIENT_APP_TARGET_PRIVDOC := $(SWAG_CLIENT_APP_PATH)_privdoc/rebar.config
 
-swag_client.generate: $(SWAG_CLIENT_SRC_TARGET)
+$(SWAG_CLIENT_APP_PATH)_%/rebar.config: $(SWAGGER_SCHEME_API_PATH)/$*
+	$(SWAGGER_CODEGEN) generate \
+		-i $(SWAGGER_SCHEME_API_PATH)/$*/$(SWAG_SPEC_FILE) \
+		-l erlang-client \
+		-o $(SWAG_CLIENT_APP_PATH)_$* \
+		--additional-properties \
+			packageName=$(SWAG_CLIENT_PREFIX)_$*
 
-swag_client.distclean:
-	rm -rf $(SWAG_CLIENT_SRC)/$(SWAG_CLIENT_PREFIX)*.erl
+swag_client.generate: $(SWAG_CLIENT_APP_TARGET_PAYRES) $(SWAG_CLIENT_APP_TARGET_PRIVDOC)
+
+swag_client.distclean: swag_client.distclean_payres swag_client.distclean_privdoc
+
+swag_client.distclean_%:
+	rm -rf $(SWAG_CLIENT_APP_PATH)_$*
 
 swag_client.regenerate: swag_client.distclean swag_client.generate
-
-$(SWAG_CLIENT_SRC_TARGET): $(SWAG_CLIENT_APP_TARGET)
-	cp $(SWAG_CLIENT_APP_PATH)/src/*.erl $(SWAG_CLIENT_SRC)/
-	rm -rf $(SWAG_CLIENT_APP_PATH)
-
-$(SWAG_CLIENT_APP_TARGET): $(SWAGGER_SCHEME)
-	$(SWAGGER_CODEGEN) generate \
-		-i $(SWAGGER_SCHEME) \
-		-l erlang-client \
-		-o $(SWAG_CLIENT_APP_PATH) \
-		--additional-properties \
-			packageName=$(SWAG_CLIENT_PREFIX)

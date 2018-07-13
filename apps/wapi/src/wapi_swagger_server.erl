@@ -9,7 +9,7 @@
 -define(DEFAULT_IP_ADDR, "::").
 -define(DEFAULT_PORT, 8080).
 
--define(START_TIME_TAG, processing_start_time).
+-define(SWAG_HANDLER_SCOPE, swag_handler).
 
 -type params() :: {cowboy_router:routes(), #{atom() => module()}}.
 
@@ -27,17 +27,13 @@ get_socket_transport() ->
     Port     = genlib_app:env(?APP, port, ?DEFAULT_PORT),
     {ranch_tcp, [{ip, IP}, {port, Port}]}.
 
-get_cowboy_config(HealthRoutes, #{
-    wallet  := WalletLogicHandler,
-    payres  := PayresLogicHandler,
-    privdoc := PrivdocLogicHandler
-}) ->
+get_cowboy_config(HealthRoutes, LogicHandlers) ->
     Dispatch =
         cowboy_router:compile(squash_routes(
             HealthRoutes ++
-            swag_wallet_server_router:get_paths(WalletLogicHandler) ++
-            swag_payres_server_router:get_paths(PayresLogicHandler) ++
-            swag_privdoc_server_router:get_paths(PrivdocLogicHandler)
+            %% swag_server_wallet_router:get_paths(maps:get(wallet, LogicHandlers)) ++
+            swag_server_payres_router:get_paths(maps:get(payres, LogicHandlers)) ++
+            swag_server_privdoc_router:get_paths(maps:get(privdoc, LogicHandlers))
         )),
     [
         {env, [
@@ -49,7 +45,7 @@ get_cowboy_config(HealthRoutes, #{
             cowboy_cors,
             cowboy_handler
         ]},
-        {onrequest, cowboy_access_log:get_request_hook()},
+        {onrequest, fun ?MODULE:request_hook/1},
         {onresponse, fun ?MODULE:response_hook/4}
     ].
 
@@ -64,7 +60,9 @@ squash_routes(Routes) ->
     cowboy_req:req().
 
 request_hook(Req) ->
-    cowboy_req:set_meta(?START_TIME_TAG, genlib_time:ticks(), Req).
+    ok = scoper:add_scope(?SWAG_HANDLER_SCOPE),
+    HookFun = cowboy_access_log:get_request_hook(),
+    HookFun(Req).
 
 -spec response_hook(cowboy:http_status(), cowboy:http_headers(), iodata(), cowboy_req:req()) ->
     cowboy_req:req().
@@ -73,6 +71,7 @@ response_hook(Code, Headers, Body, Req) ->
     try
         {Code1, Headers1, Req1} = handle_response(Code, Headers, Req),
         _ = log_access(Code1, Headers1, Body, Req1),
+        ok = cleanup_scoper(),
         Req1
     catch
         Class:Reason ->
@@ -81,6 +80,7 @@ response_hook(Code, Headers, Body, Req) ->
                 "Response hook failed for: [~p, ~p, ~p]~nwith: ~p:~p~nstacktrace: ~ts",
                 [Code, Headers, Req, Class, Reason, Stack]
             ),
+            ok = cleanup_scoper(),
             Req
     end.
 
@@ -130,3 +130,11 @@ get_oops_body(Code) ->
 log_access(Code, Headers, Body, Req) ->
     LogFun = cowboy_access_log:get_response_hook(wapi_access_lager_event),
     LogFun(Code, Headers, Body, Req).
+
+cleanup_scoper() ->
+    try scoper:get_current_scope() of
+        ?SWAG_HANDLER_SCOPE -> scoper:remove_scope();
+        _                   -> ok
+    catch
+        error:no_scopes -> ok
+    end.

@@ -1,8 +1,9 @@
 -module(wapi_auth).
 
--export([authorize_api_key/2]).
+-export([authorize_api_key/3]).
 -export([authorize_operation/3]).
 -export([issue_access_token/2]).
+-export([issue_access_token/3]).
 
 -export([get_subject_id/1]).
 -export([get_claims/1]).
@@ -20,25 +21,22 @@
 -export_type([claims  /0]).
 -export_type([consumer/0]).
 
--type operation_id() ::
-    swag_wallet_server:operation_id() |
-    swag_payres_server:operation_id() |
-    swag_privdoc_server:operation_id().
+-type operation_id() :: wapi_handler:operation_id().
 
 -type api_key() ::
-    swag_wallet_server:api_key() |
+    %% swag_wallet_server:api_key() |
     swag_payres_server:api_key() |
     swag_privdoc_server:api_key().
 
--spec authorize_api_key(
-    OperationID :: operation_id(),
-    ApiKey      :: api_key()
-) -> {true, Context :: context()} | false.
+-type handler_opts() :: wapi_handler:opts().
 
-authorize_api_key(OperationID, ApiKey) ->
+-spec authorize_api_key(operation_id(), api_key(), handler_opts()) ->
+    {true, context()}. %% | false.
+
+authorize_api_key(OperationID, ApiKey, _Opts) ->
     case parse_api_key(ApiKey) of
         {ok, {Type, Credentials}} ->
-            case authorize_api_key(OperationID, Type, Credentials) of
+            case do_authorize_api_key(OperationID, Type, Credentials) of
                 {ok, Context} ->
                     {true, Context};
                 {error, Error} ->
@@ -64,14 +62,14 @@ parse_api_key(ApiKey) ->
             {error, unsupported_auth_scheme}
     end.
 
--spec authorize_api_key(
+-spec do_authorize_api_key(
     OperationID :: operation_id(),
     Type :: atom(),
     Credentials :: binary()
 ) ->
     {ok, Context :: context()} | {error, Reason :: atom()}.
 
-authorize_api_key(_OperationID, bearer, Token) ->
+do_authorize_api_key(_OperationID, bearer, Token) ->
     % NOTE
     % We are knowingly delegating actual request authorization to the logic handler
     % so we could gather more data to perform fine-grained access control.
@@ -90,73 +88,67 @@ authorize_api_key(_OperationID, bearer, Token) ->
 ) ->
     ok | {error, unauthorized}.
 
-authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
-    Access = get_operation_access(OperationID, Req),
-    _ = case lists:all(
-        fun ({Scope, Permission}) ->
-            lists:member(Permission, wapi_acl:match(Scope, ACL))
-        end,
-        Access
-    ) of
-        true ->
-            ok;
-        false ->
-            {error, unauthorized}
-    end,
-    %% TODOD mwahaha
+%% TODO
+authorize_operation(_OperationID, _Req, _) ->
     ok.
+%% authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
+    %% Access = get_operation_access(OperationID, Req),
+    %% _ = case lists:all(
+    %%     fun ({Scope, Permission}) ->
+    %%         lists:member(Permission, wapi_acl:match(Scope, ACL))
+    %%     end,
+    %%     Access
+    %% ) of
+    %%     true ->
+    %%         ok;
+    %%     false ->
+    %%         {error, unauthorized}
+    %% end.
 
 %%
 
-%% TODO
-%% Hardcode for now, should pass it here probably as an argument
--define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 259200).
--define(DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME, 259200).
-
 -type token_spec() ::
-      {invoice    , InvoiceID    :: binary()}
-    | {invoice_tpl, InvoiceTplID :: binary()}
-    | {customer   , CustomerID   :: binary()}
-.
+    {destinations, DestinationID :: binary()}.
 
--spec issue_access_token(PartyID :: binary(), token_spec()) ->
+-spec issue_access_token(wapi_handler_utils:party_id(), token_spec()) ->
     wapi_authorizer_jwt:token().
 issue_access_token(PartyID, TokenSpec) ->
-    {Claims, ACL, Expiration} = resolve_token_spec(TokenSpec),
+    issue_access_token(PartyID, TokenSpec, unlimited).
+
+-type expiration() ::
+    {deadline, machinery:timestamp() | pos_integer()} |
+    {lifetime, Seconds :: pos_integer()}              |
+    unlimited                                         .
+
+-spec issue_access_token(wapi_handler_utils:party_id(), token_spec(), expiration()) ->
+    wapi_authorizer_jwt:token().
+issue_access_token(PartyID, TokenSpec, Expiration0) ->
+    Expiration = get_expiration(Expiration0),
+    {Claims, ACL} = resolve_token_spec(TokenSpec),
     wapi_utils:unwrap(wapi_authorizer_jwt:issue({{PartyID, wapi_acl:from_list(ACL)}, Claims}, Expiration)).
+
+-spec get_expiration(expiration()) ->
+    wapi_authorizer_jwt:expiration().
+get_expiration(Exp = unlimited) ->
+    Exp;
+get_expiration({deadline, {DateTime, Usec}}) ->
+    {deadline, genlib_time:to_unixtime(DateTime) + Usec div 1000000};
+get_expiration(Exp = {deadline, _Sec}) ->
+    Exp;
+get_expiration(Exp = {lifetime, _Sec}) ->
+    Exp.
 
 -type acl() :: [{wapi_acl:scope(), wapi_acl:permission()}].
 
 -spec resolve_token_spec(token_spec()) ->
-    {claims(), acl(), wapi_authorizer_jwt:expiration()}.
-resolve_token_spec({invoice, InvoiceID}) ->
-    Claims =
-        #{
-            <<"cons">> => <<"client">> % token consumer
-        },
+    {claims(), acl()}.
+resolve_token_spec({destinations, DestinationId}) ->
+    Claims = #{},
     ACL = [
-        {[{invoices, InvoiceID}]           , read },
-        {[{invoices, InvoiceID}, payments] , read },
-        {[{invoices, InvoiceID}, payments] , write},
-        {[payment_resources              ] , write}
+        {[party, {destinations, DestinationId}], read},
+        {[party, {destinations, DestinationId}], write}
     ],
-    Expiration = {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
-    {Claims, ACL, Expiration};
-resolve_token_spec({invoice_tpl, InvoiceTplID}) ->
-    ACL = [
-        {[party, {invoice_templates, InvoiceTplID}                           ], read },
-        {[party, {invoice_templates, InvoiceTplID}, invoice_template_invoices], write}
-    ],
-    {#{}, ACL, unlimited};
-resolve_token_spec({customer, CustomerID}) ->
-    ACL = [
-        {[{customers, CustomerID}], read},
-        {[{customers, CustomerID}, bindings], read },
-        {[{customers, CustomerID}, bindings], write},
-        {[payment_resources], write}
-    ],
-    Expiration = {lifetime, ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME},
-    {#{}, ACL, Expiration}.
+    {Claims, ACL}.
 
 -spec get_subject_id(context()) -> binary().
 
@@ -180,22 +172,22 @@ get_claim(ClaimName, {_Subject, Claims}, Default) ->
 
 %%
 
--spec get_operation_access(operation_id(), request_data()) ->
-    [{wapi_acl:scope(), wapi_acl:permission()}].
-
 %% TODO update for the wallet swag
-get_operation_access('StoreBankCard'     , _) ->
-    [{[payment_resources], write}].
+%% -spec get_operation_access(operation_id(), request_data()) ->
+%%     [{wapi_acl:scope(), wapi_acl:permission()}].
+
+%% get_operation_access('StoreBankCard'     , _) ->
+%%     [{[payment_resources], write}].
 
 -spec get_resource_hierarchy() -> #{atom() => map()}.
 
 %% TODO add some sence in here
 get_resource_hierarchy() ->
     #{
-        party             => #{},
-        wallets           => #{},
-        privdocs          => #{},
-        payment_resources => #{}
+        party => #{
+            wallets      => #{},
+            destinations => #{}
+        }
     }.
 
 -spec get_consumer(claims()) ->
