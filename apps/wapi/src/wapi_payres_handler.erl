@@ -39,12 +39,11 @@ handle_request(OperationID, Req, SwagContext, Opts) ->
     request_result().
 process_request('StoreBankCard', Req, Context, _Opts) ->
     {CardData, AuthData} = process_card_data(Req, Context),
-    wapi_handler_utils:reply_ok(201, maps:merge(to_swag(CardData), to_swag(AuthData)));
+    wapi_handler_utils:reply_ok(201, maps:merge(to_swag(bank_card, CardData), to_swag(auth_data, AuthData)));
 process_request('GetBankCard', #{'token' := Token}, _Context, _Opts) ->
-    case decode_token(Token) of
-        {ok, Data} ->
-            wapi_handler_utils:reply_ok(200, Data);
-        {error, badarg} ->
+    try wapi_handler_utils:reply_ok(200, to_swag(bank_card, Token))
+    catch
+        error:badarg ->
             wapi_handler_utils:reply_ok(404)
     end.
 
@@ -57,20 +56,11 @@ put_card_data_to_cds(CardData, SessionData, Context) ->
     Call = {cds_storage, 'PutCardData', [CardData, SessionData]},
     case service_call(Call, Context) of
         {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
-            {{bank_card, BankCard}, {auth_data, SessionID}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidCardData'{} ->
-                    wapi_handler:throw_result(wapi_handler_utils:reply_ok(400,
-                        wapi_handler_utils:get_error_msg(<<"Card data is invalid">>)
-                    ));
-                #'KeyringLocked'{} ->
-                    % TODO
-                    % It's better for the cds to signal woody-level unavailability when the
-                    % keyring is locked, isn't it? It could always mention keyring lock as a
-                    % reason in a woody error definition.
-                    wapi_handler:throw_result(wapi_handler_utils:reply_error(503))
-            end
+            {BankCard, SessionID};
+        {exception, #'InvalidCardData'{}} ->
+            wapi_handler:throw_result(wapi_handler_utils:reply_ok(422,
+                wapi_handler_utils:get_error_msg(<<"Card data is invalid">>)
+            ))
     end.
 
 to_thrift(card_data, Data) ->
@@ -92,44 +82,30 @@ to_thrift(session_data, Data) ->
         }}
     }.
 
-to_swag({Spec, Data}) when is_atom(Spec) ->
-    to_swag(Spec, Data).
-
-to_swag(bank_card, #domain_BankCard{
-    'token'          = Token,
-    'payment_system' = PaymentSystem,
-    'bin'            = Bin,
-    'masked_pan'     = MaskedPan
-}) ->
-    BankCardData = genlib_map:compact(#{
-        <<"token">>          => Token,
-        <<"paymentSystem">>  => genlib:to_binary(PaymentSystem),
-        <<"bin">>            => Bin,
-        <<"maskedPan">>      => MaskedPan,
-        <<"lastDigits">>     => wapi_utils:get_last_pan_digits(MaskedPan)
+to_swag(bank_card, BankCard = #domain_BankCard{}) ->
+    PresentationData = genlib_map:compact(#{
+        <<"paymentSystem">>  => genlib:to_binary(BankCard#domain_BankCard.payment_system),
+        <<"bin">>            => BankCard#domain_BankCard.bin,
+        <<"lastDigits">>     => wapi_utils:get_last_pan_digits(BankCard#domain_BankCard.masked_pan)
     }),
-    maps:with(
-        [<<"token">>, <<"paymentSystem">>, <<"bin">>, <<"lastDigits">>],
-        BankCardData#{<<"token">> => encode_token(BankCardData)}
-    );
+    PresentationData#{<<"token">> => to_swag(token, {BankCard, PresentationData})};
+to_swag(bank_card, Token) when is_binary(Token) ->
+    case wapi_utils:base64url_to_map(Token) of
+        Data = #{<<"token">> := _} ->
+            maps:with(
+                [<<"token">>, <<"paymentSystem">>, <<"bin">>, <<"lastDigits">>],
+                Data#{<<"token">> => Token}
+            );
+        _ ->
+            erlang:error(badarg)
+    end;
+to_swag(token, {#domain_BankCard{token = CdsToken, masked_pan = MaskedPan}, PresentationData}) ->
+    wapi_utils:map_to_base64url(PresentationData#{
+        <<"token">>     => CdsToken,
+        <<"maskedPan">> => MaskedPan
+    });
 to_swag(auth_data, PaymentSessionID) ->
     #{<<"authData">> => genlib:to_binary(PaymentSessionID)}.
-
-encode_token(TokenData) ->
-    wapi_utils:map_to_base64url(TokenData).
-
-decode_token(Token) ->
-    try wapi_utils:base64url_to_map(Token) of
-        Data = #{<<"token">> := _} ->
-            {ok, maps:with([<<"token">>, <<"paymentSystem">>, <<"bin">>, <<"lastDigits">>],
-                Data#{<<"token">> => Token})
-            };
-        _ ->
-            {error, badarg}
-    catch
-        error:badarg ->
-            {error, badarg}
-    end.
 
 parse_exp_date(ExpDate) when is_binary(ExpDate) ->
     [Month, Year0] = binary:split(ExpDate, <<"/">>),

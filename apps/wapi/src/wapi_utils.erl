@@ -35,12 +35,7 @@ base64url_to_map(Base64) when is_binary(Base64) ->
 
 -spec map_to_base64url(map()) -> binary() | no_return().
 map_to_base64url(Map) when is_map(Map) ->
-    try base64url:encode(jsx:encode(Map))
-    catch
-        Class:Reason ->
-            _ = lager:debug("encoding map ~p to base64 failed with ~p:~p", [Map, Class, Reason]),
-            erlang:error(badarg)
-    end.
+    base64url:encode(jsx:encode(Map)).
 
 -spec redact(Subject :: binary(), Pattern :: binary()) -> Redacted :: binary().
 redact(Subject, Pattern) ->

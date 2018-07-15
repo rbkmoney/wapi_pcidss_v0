@@ -12,10 +12,6 @@
 %% wapi_handler callbacks
 -export([process_request/4]).
 
-%% helper
-%% TODO move it somewhere else
--export([get_proof/2]).
-
 %% Types
 
 -type req_data()        :: wapi_handler:req_data().
@@ -45,14 +41,11 @@ handle_request(OperationID, Params, SwagContext, Opts) ->
 process_request('StorePrivateDocument', #{'PrivateDocument' := Params}, Context, _Opts) ->
     wapi_handler_utils:reply_ok(201, process_doc_data(Params, Context)).
 
+%%
+
 process_doc_data(Params, Context) ->
     {ok, Token} = put_doc_data_to_cds(to_thrift(doc_data, Params), Context),
     to_swag(doc, {Params, Token}).
-
--spec get_proof(binary(), handler_context()) -> map().
-get_proof(Token, Context) ->
-    {ok, DocData} = service_call({identdoc_storage, 'Get', [Token]}, Context),
-    to_swag(doc_data, {DocData, Token}).
 
 to_thrift(doc_data, Params = #{<<"type">> := <<"RUSDomesticPassportData">>}) ->
     {russian_domestic_passport, #'identdocstore_RussianDomesticPassport'{
@@ -72,43 +65,22 @@ to_thrift(doc_data, Params = #{<<"type">> := <<"RUSRetireeInsuranceCertificateDa
         number = maps:get(<<"number">>, Params)
     }}.
 
-to_swag(doc, {Params, Token}) ->
-    Doc = to_swag(raw_doc, {Params, Token}),
-    Doc#{<<"token">> => wapi_utils:map_to_base64url(Doc)};
-to_swag(raw_doc, {Params = #{<<"type">> := <<"RUSDomesticPassportData">>}, Token}) ->
-    #{
+to_swag(doc, {Params = #{<<"type">> := <<"RUSDomesticPassportData">>}, Token}) ->
+    PresentationData = #{
         <<"type">>           => <<"RUSDomesticPassport">>,
-        <<"token">>          => Token,
         <<"seriesMasked">>   => mask(pass_series, Params),
         <<"numberMasked">>   => mask(pass_number, Params),
         <<"fullnameMasked">> => mask(pass_fullname, Params)
-    };
-to_swag(raw_doc, {Params = #{<<"type">> := <<"RUSRetireeInsuranceCertificateData">>}, Token}) ->
-    #{
+    },
+    PresentationData#{<<"token">> => to_swag(token, {Token, PresentationData})};
+to_swag(doc, {Params = #{<<"type">> := <<"RUSRetireeInsuranceCertificateData">>}, Token}) ->
+    PresentationData = #{
         <<"type">>           => <<"RUSRetireeInsuranceCertificate">>,
-        <<"token">>          => Token,
         <<"numberMasked">>   => mask(retiree_insurance_cert_number, Params)
-     };
-to_swag(doc_data, {{russian_domestic_passport, D}, Token}) ->
-    to_swag(doc, {
-        #{
-            <<"type">>       => <<"RUSDomesticPassportData">>,
-            <<"series">>     => D#'identdocstore_RussianDomesticPassport'.series,
-            <<"number">>     => D#'identdocstore_RussianDomesticPassport'.number,
-            <<"firstName">>  => D#'identdocstore_RussianDomesticPassport'.first_name,
-            <<"familyName">> => D#'identdocstore_RussianDomesticPassport'.family_name,
-            <<"patronymic">> => D#'identdocstore_RussianDomesticPassport'.patronymic
-        },
-        Token
-    });
-to_swag(doc_data, {{russian_retiree_insurance_certificate, D}, Token}) ->
-    to_swag(doc, {
-        #{
-            <<"type">>       => <<"RUSRetireeInsuranceCertificateData">>,
-            <<"number">>     => D#'identdocstore_RussianRetireeInsuranceCertificate'.number
-        },
-        Token
-    }).
+    },
+    PresentationData#{<<"token">> => to_swag(token, {Token, PresentationData})};
+to_swag(token, {Token, PresentationData}) ->
+    wapi_utils:map_to_base64url(PresentationData#{<<"token">> => Token}).
 
 put_doc_data_to_cds(IdentityDoc, Context) ->
     service_call({identdoc_storage, 'Put', [IdentityDoc]}, Context).
