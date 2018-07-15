@@ -20,7 +20,7 @@ build('wapi', 'docker-host', finalHook) {
   }
 
   pipeDefault() {
-    if (!masterlikeBranch()) {
+    if (env.BRANCH_NAME != 'master') {
       runStage('compile') {
         withGithubPrivkey {
           sh 'make wc_compile'
