@@ -37,9 +37,13 @@ handle_request(OperationID, Req, SwagContext, Opts) ->
 
 -spec process_request(operation_id(), req_data(), handler_context(), handler_opts()) ->
     request_result().
-process_request('StoreBankCard', Req, Context, _Opts) ->
-    {CardData, AuthData} = process_card_data(Req, Context),
-    wapi_handler_utils:reply_ok(201, maps:merge(to_swag(bank_card, CardData), to_swag(auth_data, AuthData)));
+process_request('StoreBankCard', #{'BankCard' := CardData}, Context, _Opts) ->
+    CVV = maps:get(<<"cvv">>, CardData, undefined),
+    {BankCard, AuthData} = process_card_data(CardData, CVV, Context),
+    wapi_handler_utils:reply_ok(201, maps:merge(
+        to_swag(bank_card, construct_token(BankCard)),
+        to_swag(auth_data, AuthData)
+    ));
 process_request('GetBankCard', #{'token' := Token}, _Context, _Opts) ->
     try wapi_handler_utils:reply_ok(200, to_swag(bank_card, Token))
     catch
@@ -49,8 +53,14 @@ process_request('GetBankCard', #{'token' := Token}, _Context, _Opts) ->
 
 %% Internal functions
 
-process_card_data(#{'BankCard' := Data}, Context) ->
-    put_card_data_to_cds(to_thrift(card_data, Data), to_thrift(session_data, Data), Context).
+process_card_data(CardData, CVV, Context) ->
+    {BankCard, SessionID} = put_card_data_to_cds(to_thrift(card_data, CardData), to_thrift(session_data, CVV), Context),
+    case CVV of
+        V when is_binary(V) ->
+            {BankCard, SessionID};
+        undefined ->
+            {BankCard, undefined}
+    end.
 
 put_card_data_to_cds(CardData, SessionData, Context) ->
     Call = {cds_storage, 'PutCardData', [CardData, SessionData]},
@@ -75,37 +85,35 @@ to_thrift(card_data, Data) ->
         cardholder_name = genlib_map:get(<<"cardHolder">>, Data, undefined),
         cvv             = genlib_map:get(<<"cvv">>, Data, undefined)
     };
-to_thrift(session_data, Data) ->
+to_thrift(session_data, CVV) when is_binary(CVV) ->
     #'SessionData'{
-        auth_data = {card_security_code, #'CardSecurityCode'{
-            value = maps:get(<<"cvv">>, Data, <<>>)
-        }}
+        auth_data = {card_security_code, #'CardSecurityCode'{value = CVV}}
+    };
+to_thrift(session_data, undefined) ->
+    #'SessionData'{
+        auth_data = {card_security_code, #'CardSecurityCode'{value = <<>>}}
     }.
 
-to_swag(bank_card, BankCard = #domain_BankCard{}) ->
-    PresentationData = genlib_map:compact(#{
+construct_token(BankCard = #domain_BankCard{}) ->
+    wapi_utils:map_to_base64url(genlib_map:compact(#{
+        <<"token">>          => BankCard#domain_BankCard.token,
         <<"paymentSystem">>  => genlib:to_binary(BankCard#domain_BankCard.payment_system),
         <<"bin">>            => BankCard#domain_BankCard.bin,
         <<"lastDigits">>     => wapi_utils:get_last_pan_digits(BankCard#domain_BankCard.masked_pan)
-    }),
-    PresentationData#{<<"token">> => to_swag(token, {BankCard, PresentationData})};
+    })).
+
 to_swag(bank_card, Token) when is_binary(Token) ->
     case wapi_utils:base64url_to_map(Token) of
         Data = #{<<"token">> := _} ->
-            maps:with(
-                [<<"token">>, <<"paymentSystem">>, <<"bin">>, <<"lastDigits">>],
-                Data#{<<"token">> => Token}
-            );
+            Presentation = maps:with([<<"token">>, <<"paymentSystem">>, <<"bin">>, <<"lastDigits">>], Data),
+            Presentation#{<<"token">> => Token};
         _ ->
             erlang:error(badarg)
     end;
-to_swag(token, {#domain_BankCard{token = CdsToken, masked_pan = MaskedPan}, PresentationData}) ->
-    wapi_utils:map_to_base64url(PresentationData#{
-        <<"token">>     => CdsToken,
-        <<"maskedPan">> => MaskedPan
-    });
-to_swag(auth_data, PaymentSessionID) ->
-    #{<<"authData">> => genlib:to_binary(PaymentSessionID)}.
+to_swag(auth_data, PaymentSessionID) when is_binary(PaymentSessionID) ->
+    #{<<"authData">> => genlib:to_binary(PaymentSessionID)};
+to_swag(auth_data, undefined) ->
+    #{}.
 
 parse_exp_date(ExpDate) when is_binary(ExpDate) ->
     [Month, Year0] = binary:split(ExpDate, <<"/">>),
