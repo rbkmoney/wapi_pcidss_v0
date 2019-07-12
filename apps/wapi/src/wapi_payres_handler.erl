@@ -24,11 +24,22 @@
 
 %% API
 
+-define(SWAG_HANDLER_SCOPE, swag_handler).
+
 -spec authorize_api_key(operation_id(), api_key(), handler_opts()) ->
     false | {true, wapi_auth:context()}.
-authorize_api_key(OperationID, ApiKey, Opts) ->
-    ok = scoper:add_meta(#{api => payres, operation_id => OperationID}),
-    wapi_auth:authorize_api_key(OperationID, ApiKey, Opts).
+authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
+    scoper:scope(?SWAG_HANDLER_SCOPE, #{operation_id => OperationID}, fun() ->
+        _ = logger:debug("Api key authorization started"),
+        case uac:authorize_api_key(ApiKey, #{}) of
+            {ok, Context} ->
+                _ = logger:debug("Api key authorization successful"),
+                {true, Context};
+            {error, Error} ->
+                _ = logger:info("Api key authorization failed due to ~p", [Error]),
+                false
+        end
+    end).
 
 -spec handle_request(operation_id(), req_data(), request_context(), handler_opts()) ->
     request_result().
