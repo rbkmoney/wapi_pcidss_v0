@@ -45,13 +45,13 @@ filter(L) when is_list(L) -> [filter(E) || E <- L];
 filter(M) when is_map(M) -> maps:map(fun (_K, V) -> filter(V) end, M);
 
 %% damsel storage
-filter(#'CardData'{cardholder_name = CN}) ->
-    {
+filter(#'CardData'{cardholder_name = CN, cvv = CV}) ->
+    { %% Make dialyzer happy
         'CardData',
         <<"****************">>,
         {'ExpDate', <<"****">>},
         CN,
-        <<>>
+        CV
     };
 
 %% Leave all other untouched
