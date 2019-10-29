@@ -22,7 +22,9 @@
         snowflake,
         woody_user_identity,
         erl_health,
-        identdocstore_proto
+        identdocstore_proto,
+        cds_proto,
+        binbase_proto
     ]},
     {env, []}
 ]}.
