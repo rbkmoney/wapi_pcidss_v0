@@ -105,16 +105,12 @@ store_bank_card_ok_test(Config) ->
     _.
 store_pan_only_bank_card_ok_test(Config) ->
     {ok, #{
-            <<"authData">> := <<"1234563346321">>,
             <<"bin">> := <<"411111">>,
             <<"lastDigits">> := <<"1111">>,
             <<"paymentSystem">> := <<"visa">>
     }} =
         wapi_test_client:store_bank_card(?config(context, Config), #{
-        <<"cardNumber">> => <<"4111111111111111">>,
-        <<"cardHolder">> => <<"ALEXANDER WEINERSCHNITZEL">>,
-        <<"expDate">> => <<"08/27">>,
-        <<"cvv">> => <<"232">>
+        <<"cardNumber">> => <<"4111111111111111">>
     }).
 
 %%
