@@ -8,18 +8,16 @@
 -include_lib("wapi_dummy_data.hrl").
 
 -export([all/0]).
--export([groups/0]).
 -export([init_per_suite/1]).
 -export([end_per_suite/1]).
--export([init_per_group/2]).
--export([end_per_group/2]).
 -export([init_per_testcase/2]).
 -export([end_per_testcase/2]).
 
 -export([init/1]).
 
 -export([
-    store_bank_card_ok_test/1
+    store_bank_card_ok_test/1,
+    store_pan_only_bank_card_ok_test/1
 ]).
 
 -define(WAPI_IP                     , "::").
@@ -31,7 +29,6 @@
 
 -type test_case_name()  :: atom().
 -type config()          :: [{atom(), any()}].
--type group_name()      :: atom().
 
 -behaviour(supervisor).
 
@@ -44,18 +41,8 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, all}
-    ].
-
--spec groups() ->
-    [{group_name(), list(), [test_case_name()]}].
-groups() ->
-    [
-        {all, [],
-            [
-                store_bank_card_ok_test
-            ]
-        }
+        store_bank_card_ok_test,
+        store_pan_only_bank_card_ok_test
     ].
 
 %%
@@ -66,9 +53,8 @@ groups() ->
 init_per_suite(Config) ->
     SupPid = start_mocked_service_sup(),
     Apps =
-        wapi_ct_helper:start_app(woody)  ++
-        wapi_ct_helper:start_app(scoper) ++
-        start_wapi(Config),
+        wapi_ct_helper:start_app(woody) ++
+        wapi_ct_helper:start_app(scoper),
     [{apps, lists:reverse(Apps)}, {suite_test_sup, SupPid} | Config].
 
 -spec end_per_suite(config()) ->
@@ -78,27 +64,22 @@ end_per_suite(C) ->
     [application:stop(App) || App <- proplists:get_value(apps, C)],
     ok.
 
--spec init_per_group(group_name(), config()) ->
+-spec init_per_testcase(test_case_name(), config()) ->
     config().
-init_per_group(_, Config) ->
+init_per_testcase(_Name, Config) ->
+    Config1 = [{test_sup, start_mocked_service_sup()} | Config],
+    ServiceURLs = mock_services(Config1),
+    start_wapi(Config1, ServiceURLs) ,
     BasePermissions = {destinations,<<"payment_resources">>},
     Token = wapi_ct_helper:issue_token(BasePermissions, unlimited),
     Context = get_context(Token),
-    [{context, Context} | Config].
-
--spec end_per_group(group_name(), config()) ->
-    _.
-end_per_group(_Group, _C) ->
-    ok.
-
--spec init_per_testcase(test_case_name(), config()) ->
-    config().
-init_per_testcase(_Name, C) ->
-    [{test_sup, start_mocked_service_sup()} | C].
+    Config2 = [{context, Context} | Config1],
+    Config2.
 
 -spec end_per_testcase(test_case_name(), config()) ->
     config().
 end_per_testcase(_Name, C) ->
+    application:stop(wapi),
     stop_mocked_service_sup(?config(test_sup, C)),
     ok.
 
@@ -107,25 +88,22 @@ end_per_testcase(_Name, C) ->
 -spec store_bank_card_ok_test(_) ->
     _.
 store_bank_card_ok_test(Config) ->
-    Result = mock_services([
-        {cds_storage, fun
-            ('PutCardData', [
-                #'cds_CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>},
-                _SessionData
-            ]) ->
-                {ok, #'cds_PutCardDataResult'{
-                    bank_card = #cds_BankCard{
-                        token = ?STRING,
-                        bin = <<"411111">>,
-                        last_digits = Mask
-                    },
-                    session_id = <<"1234563346321">>
-                }}
-        end},
-        {binbase, fun('Lookup', _) ->
-            {ok, ?BINBASE_LOOKUP_RESULT(<<"VISA">>)} end}
-    ], Config),
-    application:set_env(wapi, service_urls, Result),
+    {ok, #{
+            <<"authData">> := <<"1234563346321">>,
+            <<"bin">> := <<"411111">>,
+            <<"lastDigits">> := <<"1111">>,
+            <<"paymentSystem">> := <<"visa">>
+    }} =
+        wapi_test_client:store_bank_card(?config(context, Config), #{
+        <<"cardNumber">> => <<"4111111111111111">>,
+        <<"cardHolder">> => <<"ALEXANDER WEINERSCHNITZEL">>,
+        <<"expDate">> => <<"08/27">>,
+        <<"cvv">> => <<"232">>
+    }).
+
+-spec store_pan_only_bank_card_ok_test(_) ->
+    _.
+store_pan_only_bank_card_ok_test(Config) ->
     {ok, #{
             <<"authData">> := <<"1234563346321">>,
             <<"bin">> := <<"411111">>,
@@ -141,11 +119,12 @@ store_bank_card_ok_test(Config) ->
 
 %%
 
-start_wapi(Config) ->
+start_wapi(Config, ServiceURLs) ->
     WapiEnv = [
         {ip, ?WAPI_IP},
         {port, ?WAPI_PORT},
         {service_type, real},
+        {service_urls, ServiceURLs},
         {realm, <<"TEST">>},
         {authorizers, #{
             jwt => #{
@@ -157,6 +136,26 @@ start_wapi(Config) ->
         }}
     ],
     wapi_ct_helper:start_app(wapi, WapiEnv).
+
+mock_services(Config) ->
+    mock_services([
+        {cds_storage, fun
+              ('PutCardData', [
+                  #'cds_CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>},
+                  _SessionData
+              ]) ->
+                  {ok, #'cds_PutCardDataResult'{
+                      bank_card = #cds_BankCard{
+                          token = ?STRING,
+                          bin = <<"411111">>,
+                          last_digits = Mask
+                      },
+                      session_id = <<"1234563346321">>
+                  }}
+          end},
+        {binbase, fun('Lookup', _) ->
+            {ok, ?BINBASE_LOOKUP_RESULT(<<"VISA">>)} end}
+    ], Config).
 
 start_mocked_service_sup() ->
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
