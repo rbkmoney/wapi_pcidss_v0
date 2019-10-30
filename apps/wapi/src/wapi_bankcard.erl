@@ -5,18 +5,18 @@
 -export([lookup_bank_info/2]).
 
 -type bank_info() :: #{
-payment_system := dmsl_domain_thrift:'BankCardPaymentSystem'(),
-bank_name      := binary(),
-issuer_country := dmsl_domain_thrift:'Residence'() | undefined,
-metadata       := map()
+    payment_system := dmsl_domain_thrift:'BankCardPaymentSystem'(),
+    bank_name      := binary(),
+    issuer_country := dmsl_domain_thrift:'Residence'() | undefined,
+    metadata       := map()
 }.
 
 -type lookup_error() ::
-notfound |
-{invalid,
-    payment_system |
-    issuer_country
-}.
+    notfound |
+    {invalid,
+        payment_system |
+        issuer_country
+    }.
 
 -spec lookup_bank_info(_PAN :: binary(), woody_context:ctx()) ->
     {ok, bank_info()} | {error, lookup_error()}.
