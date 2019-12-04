@@ -224,7 +224,6 @@ sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
             badarg |
             {badarg, term()} |
             {missing, atom()} |
-            expired |
             {malformed_acl, term()}
         } |
         {nonexistent_key, kid()} |
