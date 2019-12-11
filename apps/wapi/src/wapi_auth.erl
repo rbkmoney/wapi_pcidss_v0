@@ -13,6 +13,10 @@
 
 -export([get_resource_hierarchy/0]).
 
+-define(DEFAULT_ACCESS_TOKEN_LIFETIME, 259200).
+
+-define(SIGNEE, wapi).
+
 -type context () :: wapi_authorizer_jwt:t().
 -type claims  () :: wapi_authorizer_jwt:claims().
 -type consumer() :: client | merchant | provider.
@@ -114,7 +118,7 @@ authorize_operation(_OperationID, _Req, _) ->
 -spec issue_access_token(wapi_handler_utils:party_id(), token_spec()) ->
     wapi_authorizer_jwt:token().
 issue_access_token(PartyID, TokenSpec) ->
-    issue_access_token(PartyID, TokenSpec, unlimited).
+    issue_access_token(PartyID, TokenSpec, #{}).
 
 -type expiration() ::
     {deadline, timestamp() | pos_integer()} |
@@ -122,34 +126,31 @@ issue_access_token(PartyID, TokenSpec) ->
     unlimited                                         .
 
 -spec issue_access_token(wapi_handler_utils:party_id(), token_spec(), expiration()) ->
-    wapi_authorizer_jwt:token().
-issue_access_token(PartyID, TokenSpec, Expiration0) ->
-    Expiration = get_expiration(Expiration0),
-    {Claims, ACL} = resolve_token_spec(TokenSpec),
-    wapi_utils:unwrap(wapi_authorizer_jwt:issue({{PartyID, wapi_acl:from_list(ACL)}, Claims}, Expiration)).
-
--spec get_expiration(expiration()) ->
-    wapi_authorizer_jwt:expiration().
-get_expiration(Exp = unlimited) ->
-    Exp;
-get_expiration({deadline, {DateTime, Usec}}) ->
-    {deadline, genlib_time:to_unixtime(DateTime) + Usec div 1000000};
-get_expiration(Exp = {deadline, _Sec}) ->
-    Exp;
-get_expiration(Exp = {lifetime, _Sec}) ->
-    Exp.
-
--type acl() :: [{wapi_acl:scope(), wapi_acl:permission()}].
+    uac_authorizer_jwt:token().
+issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
+    {Claims0, DomainRoles, LifeTime} = resolve_token_spec(TokenSpec),
+    Claims = maps:merge(ExtraProperties, Claims0),
+    wapi_utils:unwrap(uac_authorizer_jwt:issue(
+        wapi_utils:get_unique_id(),
+        LifeTime,
+        PartyID,
+        DomainRoles,
+        Claims,
+        ?SIGNEE
+    )).
 
 -spec resolve_token_spec(token_spec()) ->
-    {claims(), acl()}.
+    {claims(), uac_authorizer_jwt:domains(), uac_authorizer_jwt:expiration()}.
 resolve_token_spec({destinations, DestinationId}) ->
     Claims = #{},
-    ACL = [
-        {[party, {destinations, DestinationId}], read},
-        {[party, {destinations, DestinationId}], write}
-    ],
-    {Claims, ACL}.
+    DomainRoles = #{
+        <<"wallet-api">> => uac_acl:from_list([
+            {[party, {destinations, DestinationId}], read},
+            {[party, {destinations, DestinationId}], write}
+        ])
+    },
+    Expiration = {lifetime, ?DEFAULT_ACCESS_TOKEN_LIFETIME},
+    {Claims, DomainRoles, Expiration}.
 
 -spec get_subject_id(context()) -> binary().
 
