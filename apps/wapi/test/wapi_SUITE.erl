@@ -20,6 +20,7 @@
 -behaviour(supervisor).
 
 -export([store_bank_card_success_test/1]).
+-export([get_bank_card_success_test  /1]).
 
 -type config()         :: ct_helper:config().
 -type test_case_name() :: ct_helper:test_case_name().
@@ -36,7 +37,8 @@ all() ->
 groups() ->
     [
         {default, [
-            store_bank_card_success_test
+            store_bank_card_success_test,
+            get_bank_card_success_test
         ]}
     ].
 
@@ -85,13 +87,32 @@ end_per_testcase(_Name, C) ->
 -spec store_bank_card_success_test(config()) -> test_return().
 
 store_bank_card_success_test(C) ->
+    CardNumber = <<"4150399999000900">>,
     wapi_ct_helper:mock_services([{cds_storage, fun
-        ('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT}
+        ('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT(CardNumber)}
     end}], C),
-    Request = #{
-        <<"type">>       => <<"BankCard">>,
-        <<"cardNumber">> => <<"4150399999000900">>,
-        <<"expDate">>    => <<"12/25">>,
-        <<"cardHolder">> => <<"LEXA SVOTIN">>
-    },
-    {ok, _} = wapi_client_payres:store_bank_card(?config(context, C), Request).
+    Bin        = ?BIN(CardNumber),
+    LastDigits = ?LAST_DIGITS(CardNumber),
+    {ok, #{
+        <<"bin">>        := Bin,
+        <<"lastDigits">> := LastDigits
+    }} = wapi_client_payres:store_bank_card(?config(context, C), ?STORE_BANK_CARD_REQUEST(CardNumber)).
+
+-spec get_bank_card_success_test(config()) -> test_return().
+
+get_bank_card_success_test(C) ->
+    CardNumber = <<"4150399999000900">>,
+     wapi_ct_helper:mock_services([{cds_storage, fun
+        ('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT(CardNumber)};
+        ('GetCardData', _) -> {ok, ?CARD_DATA(CardNumber)}
+    end}], C),
+    {ok, #{
+        <<"token">> := Token
+    }} = wapi_client_payres:store_bank_card(?config(context, C), ?STORE_BANK_CARD_REQUEST(CardNumber)),
+    Bin        = ?BIN(CardNumber),
+    LastDigits = ?LAST_DIGITS(CardNumber),
+    {ok, #{
+        <<"bin">>        := Bin,
+        <<"lastDigits">> := LastDigits,
+        <<"token">>      := Token
+    }} = wapi_client_payres:get_bank_card(?config(context, C), Token).
