@@ -57,16 +57,16 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}, H
     ok = set_request_meta(Req),
     _ = logger:info("Processing request ~p", [OperationID]),
     try
-        case wapi_auth:authorize_operation(OperationID, Req, AuthContext) of
+        OperationACL = wapi_auth:get_operation_access(OperationID, Req),
+        case uac:authorize_operation(OperationACL, AuthContext)  of
             ok ->
                 WoodyContext = create_woody_context(RpcID, AuthContext, Opts),
                 Context = create_handler_context(SwagContext, WoodyContext),
-                Handler:process_request(OperationID, Req, Context, Opts)
-            %% ToDo: return back as soon, as authorization is implemented
-            %% {error, _} = Error ->
-            %%     _ = logger:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
-            %%     wapi_handler_utils:reply_error(401,
-            %%         wapi_handler_utils:get_error_msg(<<"Unauthorized operation">>))
+                Handler:process_request(OperationID, Req, Context, Opts);
+            {error, _} = Error ->
+                _ = logger:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
+                wapi_handler_utils:reply_error(401,
+                    wapi_handler_utils:get_error_msg(<<"Unauthorized operation">>))
         end
     catch
         throw:{?request_result, Result} ->
@@ -117,6 +117,7 @@ set_request_meta(#{'X-Request-ID' := RequestID}) ->
 -define(APP, wapi).
 
 collect_user_identity(AuthContext, _Opts) ->
+    ct:log("AuthCtx: ~p", [AuthContext]),
     genlib_map:compact(#{
         id       => wapi_auth:get_subject_id(AuthContext),
         %% TODO pass realm via Opts

@@ -1,7 +1,7 @@
 -module(wapi_auth).
 
+-export([get_access_config/0]).
 -export([authorize_api_key/3]).
--export([authorize_operation/3]).
 -export([issue_access_token/2]).
 -export([issue_access_token/3]).
 
@@ -12,15 +12,15 @@
 -export([get_consumer/1]).
 
 -export([get_resource_hierarchy/0]).
+-export([get_operation_access/2]).
 
 -define(DEFAULT_ACCESS_TOKEN_LIFETIME, 259200).
 
 -define(SIGNEE, wapi).
 
--type context () :: wapi_authorizer_jwt:t().
--type claims  () :: wapi_authorizer_jwt:claims().
+-type context () :: uac:context().
+-type claims  () :: uac:claims().
 -type consumer() :: client | merchant | provider.
--type timestamp() :: {calendar:datetime(), 0..999999}. % machinery:timestamp()
 
 -export_type([context /0]).
 -export_type([claims  /0]).
@@ -39,76 +39,16 @@
     {true, context()}. %% | false.
 
 authorize_api_key(OperationID, ApiKey, _Opts) ->
-    case parse_api_key(ApiKey) of
-        {ok, {Type, Credentials}} ->
-            case do_authorize_api_key(OperationID, Type, Credentials) of
-                {ok, Context} ->
-                    {true, Context};
-                {error, Error} ->
-                    _ = log_auth_error(OperationID, Error),
-                    false
-            end;
+    case uac:authorize_api_key(ApiKey, #{}) of
+        {ok, Context} ->
+            {true, Context};
         {error, Error} ->
-            _ = log_auth_error(OperationID, Error),
+            log_auth_error(OperationID, Error),
             false
     end.
 
 log_auth_error(OperationID, Error) ->
     logger:info("API Key authorization failed for ~p due to ~p", [OperationID, Error]).
-
--spec parse_api_key(ApiKey :: api_key()) ->
-    {ok, {bearer, Credentials :: binary()}} | {error, Reason :: atom()}.
-
-parse_api_key(ApiKey) ->
-    case ApiKey of
-        <<"Bearer ", Credentials/binary>> ->
-            {ok, {bearer, Credentials}};
-        _ ->
-            {error, unsupported_auth_scheme}
-    end.
-
--spec do_authorize_api_key(
-    OperationID :: operation_id(),
-    Type :: atom(),
-    Credentials :: binary()
-) ->
-    {ok, Context :: context()} | {error, Reason :: atom()}.
-
-do_authorize_api_key(_OperationID, bearer, Token) ->
-    % NOTE
-    % We are knowingly delegating actual request authorization to the logic handler
-    % so we could gather more data to perform fine-grained access control.
-    wapi_authorizer_jwt:verify(Token).
-
-%%
-
-% TODO
-% We need shared type here, exported somewhere in swagger app
--type request_data() :: #{atom() | binary() => term()}.
-
--spec authorize_operation(
-    OperationID :: operation_id(),
-    Req :: request_data(),
-    Auth :: wapi_authorizer_jwt:t()
-) ->
-    ok | {error, unauthorized}.
-
-%% TODO
-authorize_operation(_OperationID, _Req, _) ->
-    ok.
-%% authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
-    %% Access = get_operation_access(OperationID, Req),
-    %% _ = case lists:all(
-    %%     fun ({Scope, Permission}) ->
-    %%         lists:member(Permission, wapi_acl:match(Scope, ACL))
-    %%     end,
-    %%     Access
-    %% ) of
-    %%     true ->
-    %%         ok;
-    %%     false ->
-    %%         {error, unauthorized}
-    %% end.
 
 %%
 
@@ -116,16 +56,11 @@ authorize_operation(_OperationID, _Req, _) ->
     {destinations, DestinationID :: binary()}.
 
 -spec issue_access_token(wapi_handler_utils:party_id(), token_spec()) ->
-    wapi_authorizer_jwt:token().
+    uac_authorizer_jwt:token().
 issue_access_token(PartyID, TokenSpec) ->
     issue_access_token(PartyID, TokenSpec, #{}).
 
--type expiration() ::
-    {deadline, timestamp() | pos_integer()} |
-    {lifetime, Seconds :: pos_integer()}              |
-    unlimited                                         .
-
--spec issue_access_token(wapi_handler_utils:party_id(), token_spec(), expiration()) ->
+-spec issue_access_token(wapi_handler_utils:party_id(), token_spec(), map()) ->
     uac_authorizer_jwt:token().
 issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
     {Claims0, DomainRoles, LifeTime} = resolve_token_spec(TokenSpec),
@@ -144,7 +79,7 @@ issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
 resolve_token_spec({destinations, DestinationId}) ->
     Claims = #{},
     DomainRoles = #{
-        <<"wallet-api">> => uac_acl:from_list([
+        <<"common-api">> => uac_acl:from_list([
             {[party, {destinations, DestinationId}], read},
             {[party, {destinations, DestinationId}], write}
         ])
@@ -154,32 +89,35 @@ resolve_token_spec({destinations, DestinationId}) ->
 
 -spec get_subject_id(context()) -> binary().
 
-get_subject_id({{SubjectID, _ACL}, _}) ->
+get_subject_id({_Id, {SubjectID, _ACL}, _}) ->
     SubjectID.
 
 -spec get_claims(context()) -> claims().
 
-get_claims({_Subject, Claims}) ->
+get_claims({_Id, _Subject, Claims}) ->
     Claims.
 
 -spec get_claim(binary(), context()) -> term().
 
-get_claim(ClaimName, {_Subject, Claims}) ->
+get_claim(ClaimName, {_Id, _Subject, Claims}) ->
     maps:get(ClaimName, Claims).
 
 -spec get_claim(binary(), context(), term()) -> term().
 
-get_claim(ClaimName, {_Subject, Claims}, Default) ->
+get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
     maps:get(ClaimName, Claims, Default).
 
 %%
 
-%% TODO update for the wallet swag
-%% -spec get_operation_access(operation_id(), request_data()) ->
-%%     [{wapi_acl:scope(), wapi_acl:permission()}].
+-type request_data() :: any(). % TODO: change
 
-%% get_operation_access('StoreBankCard'     , _) ->
-%%     [{[payment_resources], write}].
+-spec get_operation_access(operation_id(), request_data()) ->
+    [{uac_acl:scope(), uac_acl:permission()}].
+
+get_operation_access('StoreBankCard'     , _) ->
+    [{[party], write}];
+get_operation_access('GetBankCard'     , _) ->
+    [{[party], read}].
 
 -spec get_resource_hierarchy() -> #{atom() => map()}.
 
@@ -200,3 +138,11 @@ get_consumer(Claims) ->
         <<"client"  >> -> client;
         <<"provider">> -> provider
     end.
+
+-spec get_access_config() -> map().
+
+get_access_config() ->
+    #{
+        domain_name => <<"common-api">>,
+        resource_hierarchy => get_resource_hierarchy()
+    }.
