@@ -117,7 +117,6 @@ set_request_meta(#{'X-Request-ID' := RequestID}) ->
 -define(APP, wapi).
 
 collect_user_identity(AuthContext, _Opts) ->
-    ct:log("AuthCtx: ~p", [AuthContext]),
     genlib_map:compact(#{
         id       => wapi_auth:get_subject_id(AuthContext),
         %% TODO pass realm via Opts
