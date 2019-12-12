@@ -11,7 +11,6 @@
 -export([start_wapi/2]).
 -export([issue_token/2]).
 -export([issue_token/3]).
-% -export([issue_token/4]).
 -export([get_context/1]).
 -export([get_context/2]).
 -export([get_keysource/2]).
@@ -19,7 +18,6 @@
 -export([stop_mocked_service_sup/1]).
 -export([mock_services/2]).
 -export([mock_services_/2]).
-% -export([get_lifetime/0]).
 
 -define(WAPI_IP                     , "::").
 -define(WAPI_PORT                   , 8080).
