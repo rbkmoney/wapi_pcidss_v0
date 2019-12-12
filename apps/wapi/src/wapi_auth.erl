@@ -21,6 +21,7 @@
 -type context () :: uac:context().
 -type claims  () :: uac:claims().
 -type consumer() :: client | merchant | provider.
+-type request_data() :: #{atom() | binary() => term()}.
 
 -export_type([context /0]).
 -export_type([claims  /0]).
@@ -43,7 +44,7 @@ authorize_api_key(OperationID, ApiKey, _Opts) ->
         {ok, Context} ->
             {true, Context};
         {error, Error} ->
-            log_auth_error(OperationID, Error),
+            _ = log_auth_error(OperationID, Error),
             false
     end.
 
@@ -109,14 +110,12 @@ get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
 
 %%
 
--type request_data() :: any(). % TODO: change
-
 -spec get_operation_access(operation_id(), request_data()) ->
     [{uac_acl:scope(), uac_acl:permission()}].
 
-get_operation_access('StoreBankCard'     , _) ->
+get_operation_access('StoreBankCard', _) ->
     [{[party], write}];
-get_operation_access('GetBankCard'     , _) ->
+get_operation_access('GetBankCard', _) ->
     [{[party], read}].
 
 -spec get_resource_hierarchy() -> #{atom() => map()}.

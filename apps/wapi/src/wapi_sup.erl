@@ -22,7 +22,6 @@ start_link() ->
 -spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 
 init([]) ->
-    % AuthorizerSpecs = get_authorizer_child_specs(),
     {LogicHandlers, LogicHandlerSpecs} = get_logic_handler_info(),
     HealthCheck = enable_health_logging(genlib_app:env(wapi, health_check, #{})),
     HealthRoutes = [{'_', [erl_health_handle:get_route(HealthCheck)]}],
