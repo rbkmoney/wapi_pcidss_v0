@@ -3,6 +3,7 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("dmsl/include/dmsl_cds_thrift.hrl").
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+-include_lib("dmsl/include/dmsl_identity_document_storage_thrift.hrl").
 -include_lib("stdlib/include/assert.hrl").
 -include_lib("wapi_dummy_data.hrl").
 
@@ -21,6 +22,7 @@
 
 -export([store_bank_card_success_test/1]).
 -export([get_bank_card_success_test  /1]).
+-export([store_privdoc_success_test  /1]).
 
 -type config()         :: ct_helper:config().
 -type test_case_name() :: ct_helper:test_case_name().
@@ -38,7 +40,8 @@ groups() ->
     [
         {default, [
             store_bank_card_success_test,
-            get_bank_card_success_test
+            get_bank_card_success_test,
+            store_privdoc_success_test
         ]}
     ].
 
@@ -102,7 +105,7 @@ store_bank_card_success_test(C) ->
 
 get_bank_card_success_test(C) ->
     CardNumber = <<"4150399999000900">>,
-     wapi_ct_helper:mock_services([{cds_storage, fun
+    wapi_ct_helper:mock_services([{cds_storage, fun
         ('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT(CardNumber)};
         ('GetCardData', _) -> {ok, ?CARD_DATA(CardNumber)}
     end}], C),
@@ -116,3 +119,11 @@ get_bank_card_success_test(C) ->
         <<"lastDigits">> := LastDigits,
         <<"token">>      := Token
     }} = wapi_client_payres:get_bank_card(?config(context, C), Token).
+
+-spec store_privdoc_success_test(config()) -> test_return().
+
+store_privdoc_success_test(C) ->
+    wapi_ct_helper:mock_services([{identdoc_storage, fun
+        ('Put', _) -> {ok, ?STRING}
+    end}], C),
+    {ok, _} = wapi_client_privdoc:store_private_document(?config(context, C), ?STORE_PRIVATE_DOCUMENT_REQUEST).
