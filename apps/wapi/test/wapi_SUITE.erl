@@ -3,7 +3,6 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("dmsl/include/dmsl_cds_thrift.hrl").
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
--include_lib("dmsl/include/dmsl_identity_document_storage_thrift.hrl").
 -include_lib("stdlib/include/assert.hrl").
 -include_lib("wapi_dummy_data.hrl").
 
