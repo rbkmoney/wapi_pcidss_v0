@@ -13,6 +13,7 @@
 -define(DEFAULT_ACCESS_TOKEN_LIFETIME, 259200).
 
 -define(SIGNEE, wapi).
+-define(DOMAIN, <<"common-api">>).
 
 -type context () :: uac:context().
 -type claims  () :: uac:claims().
@@ -76,7 +77,7 @@ issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
 resolve_token_spec({destinations, DestinationId}) ->
     Claims = #{},
     DomainRoles = #{
-        <<"common-api">> => uac_acl:from_list([
+        ?DOMAIN => uac_acl:from_list([
             {[party, {destinations, DestinationId}], read},
             {[party, {destinations, DestinationId}], write}
         ])
@@ -120,6 +121,6 @@ get_consumer(Claims) ->
 
 get_access_config() ->
     #{
-        domain_name => <<"common-api">>,
+        domain_name => ?DOMAIN,
         resource_hierarchy => get_resource_hierarchy()
     }.
