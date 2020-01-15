@@ -5,10 +5,6 @@
 -export([issue_access_token/2]).
 -export([issue_access_token/3]).
 
--export([get_subject_id/1]).
--export([get_claims/1]).
--export([get_claim/2]).
--export([get_claim/3]).
 -export([get_consumer/1]).
 
 -export([get_resource_hierarchy/0]).
@@ -87,26 +83,6 @@ resolve_token_spec({destinations, DestinationId}) ->
     },
     Expiration = {lifetime, ?DEFAULT_ACCESS_TOKEN_LIFETIME},
     {Claims, DomainRoles, Expiration}.
-
--spec get_subject_id(context()) -> binary().
-
-get_subject_id({_Id, {SubjectID, _ACL}, _}) ->
-    SubjectID.
-
--spec get_claims(context()) -> claims().
-
-get_claims({_Id, _Subject, Claims}) ->
-    Claims.
-
--spec get_claim(binary(), context()) -> term().
-
-get_claim(ClaimName, {_Id, _Subject, Claims}) ->
-    maps:get(ClaimName, Claims).
-
--spec get_claim(binary(), context(), term()) -> term().
-
-get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
-    maps:get(ClaimName, Claims, Default).
 
 %%
 
