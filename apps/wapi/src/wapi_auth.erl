@@ -91,11 +91,11 @@ resolve_token_spec({destinations, DestinationId}) ->
     [{uac_acl:scope(), uac_acl:permission()}].
 
 get_operation_access('StoreBankCard', _) ->
-    [{[party], write}];
+    [];
 get_operation_access('GetBankCard', _) ->
-    [{[party], read}];
+    [];
 get_operation_access('StorePrivateDocument', _) ->
-    [{[party], write}].
+    [].
 
 -spec get_resource_hierarchy() -> #{atom() => map()}.
 
