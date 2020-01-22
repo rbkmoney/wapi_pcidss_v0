@@ -84,10 +84,10 @@ decode_legacy_token(Token) ->
     end.
 
 process_card_data(CardData, CVV, Context) ->
-    CardDataThrift    = to_thrift(card_data, CardData),
-    SessionThrift     = to_thrift(session_data, CVV),
-    {ok, BankCardCDS} = put_card_to_cds(CardDataThrift, Context),
-    {ok, SessionID}   = put_session_to_cds(SessionThrift, Context),
+    CardDataThrift = to_thrift(card_data, CardData),
+    SessionThrift  = to_thrift(session_data, CVV),
+    BankCardCDS = put_card_to_cds(CardDataThrift, Context),
+    SessionID   = put_session_to_cds(SessionThrift, Context),
     BankCard = construct_bank_card(BankCardCDS, CardData),
     case CVV of
         V when is_binary(V) ->
@@ -100,7 +100,7 @@ put_card_to_cds(CardData, Context) ->
     Call = {cds_storage, 'PutCard', [CardData]},
     case service_call(Call, Context) of
         {ok, #cds_PutCardResult{bank_card = BankCard}} ->
-            {ok, BankCard};
+            BankCard;
         {exception, #cds_InvalidCardData{}} ->
             wapi_handler:throw_result(wapi_handler_utils:reply_ok(422,
                 wapi_handler_utils:get_error_msg(<<"Card data is invalid">>)
@@ -111,7 +111,7 @@ put_session_to_cds(SessionData, Context) ->
     SessionID = make_random_id(),
     Call = {cds_storage, 'PutSession', [SessionID, SessionData]},
     {ok, ok} = service_call(Call, Context),
-    {ok, SessionID}.
+    SessionID.
 
 make_random_id() ->
     Random = crypto:strong_rand_bytes(16),
