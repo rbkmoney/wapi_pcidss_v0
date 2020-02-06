@@ -1,7 +1,8 @@
--module(wapi_test_client_lib).
+-module(wapi_client_lib).
 
--export([get_context/4]).
 -export([get_context/5]).
+-export([get_context/6]).
+-export([get_context/7]).
 
 -export([handle_response/1]).
 -export([make_request/2]).
@@ -14,7 +15,9 @@
     token         := term(),
     timeout       := integer(),
     event_handler := event_handler(),
-    protocol      := protocol()
+    protocol      := protocol(),
+    deadline      := iolist() | undefined,
+    extra_properties := map()
 }.
 -export_type([context/0]).
 
@@ -53,6 +56,9 @@ make_search_query_string(ParamList) ->
 
 -spec prepare_param({atom(), term()}) ->
     map().
+
+prepare_param({limit, P})          -> #{<<"limit">> => genlib:to_binary(P)};
+prepare_param({offset, P})         -> #{<<"offset">> => genlib:to_binary(P)};
 prepare_param({ParamName, P})      -> #{genlib:to_binary(ParamName) => P}.
 
 -spec make_request(context(), map()) ->
@@ -86,29 +92,33 @@ handle_response(Response) ->
     {ok, term()} | {error, term()}.
 handle_response(Code, _, _) when Code =:= 202; Code =:= 204 ->
     {ok, undefined};
-handle_response(303, Headers, _) ->
-    URL = proplists:get_value(<<"Location">>, Headers),
-    {ok, {redirect, URL}};
 handle_response(Code, _, Body) when Code div 100 == 2 ->
     %% 2xx HTTP code
     {ok, decode_body(Body)};
 handle_response(Code, _, Body) ->
     {error, {Code, Body}}.
 
--spec get_context(string(), term(), integer(), protocol()) ->
+-spec get_context(string(), term(), integer(), protocol(), map()) ->
     context().
-get_context(Url, Token, Timeout, Protocol) ->
-    get_context(Url, Token, Timeout, Protocol, default_event_handler()).
+get_context(Url, Token, Timeout, Protocol, ExtraProperties) ->
+    get_context(Url, Token, Timeout, Protocol, ExtraProperties, default_event_handler()).
 
--spec get_context(string(), term(), integer(), protocol(), event_handler()) ->
+-spec get_context(string(), term(), integer(), protocol(), map(), event_handler()) ->
     context().
-get_context(Url, Token, Timeout, Protocol, EventHandler) ->
+get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler) ->
+    get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler, undefined).
+
+-spec get_context(string(), term(), integer(), protocol(), map(), event_handler(), iolist() | undefined) ->
+    context().
+get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler, Deadline) ->
     #{
         url           => Url,
         token         => Token,
         timeout       => Timeout,
         protocol      => Protocol,
-        event_handler => EventHandler
+        event_handler => EventHandler,
+        deadline      => Deadline,
+        extra_properties => ExtraProperties
     }.
 
 -spec default_event_handler() ->
@@ -136,12 +146,12 @@ get_hackney_opts(Context) ->
 
 -spec headers(context()) ->
     list(header()).
-headers(Context) ->
-    RequiredHeaders = [x_request_id_header() | json_accept_headers()],
+headers(#{deadline := Deadline} = Context) ->
+    RequiredHeaders = x_request_deadline_header(Deadline, [x_request_id_header() | json_accept_headers()]),
     case maps:get(token, Context) of
         <<>> ->
             RequiredHeaders;
-        Token ->
+        {ok, Token} ->
             [auth_header(Token) | RequiredHeaders]
     end.
 
@@ -149,6 +159,13 @@ headers(Context) ->
     header().
 x_request_id_header() ->
     {<<"X-Request-ID">>, integer_to_binary(rand:uniform(100000))}.
+
+-spec x_request_deadline_header(iolist() | undefined, list()) ->
+    list().
+x_request_deadline_header(undefined, Headers) ->
+    Headers;
+x_request_deadline_header(Time, Headers) ->
+    [{<<"X-Request-Deadline">>, Time} | Headers].
 
 -spec auth_header(term()) ->
     header().

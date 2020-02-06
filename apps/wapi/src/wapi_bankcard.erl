@@ -1,5 +1,6 @@
 -module(wapi_bankcard).
 
+-include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 -include_lib("binbase_proto/include/binbase_binbase_thrift.hrl").
 
 -export([lookup_bank_info/2]).
@@ -26,11 +27,11 @@ lookup_bank_info(PAN, WoodyCtx) ->
     case wapi_woody_client:call_service(binbase, 'Lookup', [PAN, RequestVersion], WoodyCtx) of
         {ok, BinData} ->
             decode_bank_info(BinData);
-        {exception, #'binbase_BinNotFound'{}} ->
+        {exception, #binbase_BinNotFound{}} ->
             {error, notfound}
     end.
 
-decode_bank_info(#'binbase_ResponseData'{bin_data = BinData, version = Version}) ->
+decode_bank_info(#binbase_ResponseData{bin_data = BinData, version = Version}) ->
     try
         {ok, #{
             payment_system => decode_payment_system(BinData#binbase_BinData.payment_system),
