@@ -1,9 +1,5 @@
 -module(wapi_payres_handler).
 
-% <<<<<<< HEAD
-% -include_lib("cds_proto/include/cds_proto_storage_thrift.hrl").
-% -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
-% =======
 -include_lib("fistful_proto/include/ff_proto_base_thrift.hrl").
 -include_lib("cds_proto/include/cds_proto_storage_thrift.hrl").
 
