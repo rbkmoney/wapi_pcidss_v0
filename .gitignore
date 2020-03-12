@@ -4,12 +4,7 @@ log
 *~
 erl_crash.dump
 .tags*
-*.sublime-*
 .edts
-*.iml
-.idea
-
-.DS_Store
 
 # rebar
 /_checkouts/
