@@ -141,9 +141,20 @@ construct_bank_card(BankCard, CardData, BankInfo) ->
     }).
 
 to_thrift(card_data, Data) ->
+    ExpDate = case parse_exp_date(genlib_map:get(<<"expDate">>, Data)) of
+                  {Month, Year} ->
+                      #cds_ExpDate{
+                          month = Month,
+                          year = Year
+                      };
+                  undefined ->
+                      undefined
+              end,
     CardNumber = genlib:to_binary(genlib_map:get(<<"cardNumber">>, Data)),
     #cds_CardData{
-        pan  = CardNumber
+        pan  = CardNumber,
+        exp_date = ExpDate,
+        cardholder_name = genlib_map:get(<<"cardHolder">>, Data)
     };
 to_thrift(bank_card, BankCard) ->
     ExpDate = genlib_map:get(exp_date, BankCard),
