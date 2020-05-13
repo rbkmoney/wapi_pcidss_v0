@@ -3,8 +3,6 @@
 -export([base64url_to_map/1]).
 -export([map_to_base64url/1]).
 
--export([to_universal_time/1]).
-
 -export([redact/2]).
 -export([mask_and_keep/4]).
 -export([mask/4]).
@@ -17,6 +15,7 @@
 -export([get_url/3]).
 
 -export([get_last_pan_digits/1]).
+-export([decode_masked_pan/3]).
 
 -export([get_unique_id/0]).
 
@@ -88,23 +87,6 @@ mask(leading, MaskLen, MaskChar, Chardata) ->
         string:right(string:substr(Str, MaskLen + 1), erlang:length(Str), MaskChar)
     ).
 
--spec to_universal_time(Timestamp :: binary()) -> TimestampUTC :: binary().
-to_universal_time(Timestamp) ->
-    {ok, {Date, Time, Usec, TZOffset}} = rfc3339:parse(Timestamp),
-    Seconds = calendar:datetime_to_gregorian_seconds({Date, Time}),
-    %% The following crappy code is a dialyzer workaround
-    %% for the wrong rfc3339:parse/1 spec.
-    {DateUTC, TimeUTC} = calendar:gregorian_seconds_to_datetime(
-        case TZOffset of
-            _ when is_integer(TZOffset) ->
-                Seconds - (60 * TZOffset);
-            _ ->
-                Seconds
-        end
-    ),
-    {ok, TimestampUTC} = rfc3339:format({DateUTC, TimeUTC, Usec, 0}),
-    TimestampUTC.
-
 -spec unwrap(ok | {ok, Value} | {error, _Error}) ->
     Value | no_return().
 unwrap(ok) ->
@@ -162,6 +144,13 @@ get_last_pan_digits(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGT
 get_last_pan_digits(MaskedPan) ->
     MaskedPan.
 
+-spec decode_masked_pan(pos_integer(), binary(), binary()) ->
+    binary().
+
+decode_masked_pan(PanLen, Bin, LastDigits) ->
+    Mask = binary:copy(<<"*">>, PanLen - byte_size(Bin) - byte_size(LastDigits)),
+    <<Bin/binary, Mask/binary, LastDigits/binary>>.
+
 -spec get_unique_id() -> binary().
 
 get_unique_id() ->
@@ -174,13 +163,6 @@ get_unique_id() ->
 -include_lib("eunit/include/eunit.hrl").
 
 -spec test() -> _.
-
--spec to_universal_time_test() -> _.
-to_universal_time_test() ->
-    ?assertEqual(<<"2017-04-19T13:56:07Z">>,        to_universal_time(<<"2017-04-19T13:56:07Z">>)),
-    ?assertEqual(<<"2017-04-19T13:56:07.530000Z">>, to_universal_time(<<"2017-04-19T13:56:07.53Z">>)),
-    ?assertEqual(<<"2017-04-19T10:36:07.530000Z">>, to_universal_time(<<"2017-04-19T13:56:07.53+03:20">>)),
-    ?assertEqual(<<"2017-04-19T17:16:07.530000Z">>, to_universal_time(<<"2017-04-19T13:56:07.53-03:20">>)).
 
 -spec redact_test() -> _.
 redact_test() ->

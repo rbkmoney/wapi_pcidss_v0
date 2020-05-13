@@ -86,7 +86,6 @@ start_app(AppName) ->
 start_app(AppName, Env) ->
     genlib_app:start_application_with(AppName, Env).
 
-
 -spec start_wapi(config()) ->
     [app_name()].
 start_wapi(Config) ->
@@ -95,6 +94,7 @@ start_wapi(Config) ->
 -spec start_wapi(config(), list()) ->
     [app_name()].
 start_wapi(Config, ExtraEnv) ->
+    JwkPath = get_keysource("keys/local/jwk.json", Config),
     WapiEnv = ExtraEnv ++ [
         {ip, ?WAPI_IP},
         {port, ?WAPI_PORT},
@@ -102,11 +102,17 @@ start_wapi(Config, ExtraEnv) ->
         {public_endpoint, <<"localhost:8080">>},
         {access_conf, #{
             jwt => #{
-                signee => wapi,
                 keyset => #{
                     wapi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
             }
+        }},
+        {lechiffre_opts,  #{
+            encryption_key_path => JwkPath,
+            decryption_key_paths => [JwkPath]
+        }},
+        {validation, #{
+            env => #{now => {{2020, 02, 02}, {0, 0, 0}}}
         }}
     ],
     start_app(wapi, WapiEnv).
@@ -148,15 +154,17 @@ issue_token(ACL, LifeTime) ->
     }.
 
 issue_token(PartyID, ACL, LifeTime) ->
-    Claims = #{?STRING => ?STRING},
     DomainRoles = #{
         <<"common-api">> => uac_acl:from_list(ACL)
     },
+    Claims = #{
+        ?STRING => ?STRING,
+        <<"exp">> => LifeTime,
+        <<"resource_access">> => DomainRoles
+    },
     uac_authorizer_jwt:issue(
         wapi_utils:get_unique_id(),
-        LifeTime,
         PartyID,
-        DomainRoles,
         Claims,
         wapi
     ).
@@ -199,7 +207,7 @@ mock_services_(Services, SupPid) when is_pid(SupPid) ->
         #{
             ip => IP,
             port => Port,
-            event_handler => scoper_woody_event_handler,
+            event_handler => {scoper_woody_event_handler, #{}},
             handlers => lists:map(fun mock_service_handler/1, Services)
         }
     ),

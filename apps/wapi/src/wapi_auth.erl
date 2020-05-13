@@ -37,7 +37,7 @@
     {true, context()}. %% | false.
 
 authorize_api_key(OperationID, ApiKey, _Opts) ->
-    case uac:authorize_api_key(ApiKey, #{}) of
+    case uac:authorize_api_key(ApiKey, get_verification_options()) of
         {ok, Context} ->
             {true, Context};
         {error, Error} ->
@@ -61,30 +61,28 @@ issue_access_token(PartyID, TokenSpec) ->
 -spec issue_access_token(wapi_handler_utils:party_id(), token_spec(), map()) ->
     uac_authorizer_jwt:token().
 issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
-    {Claims0, DomainRoles, LifeTime} = resolve_token_spec(TokenSpec),
+    Claims0 = resolve_token_spec(TokenSpec),
     Claims = maps:merge(ExtraProperties, Claims0),
     wapi_utils:unwrap(uac_authorizer_jwt:issue(
         wapi_utils:get_unique_id(),
-        LifeTime,
         PartyID,
-        DomainRoles,
         Claims,
         ?SIGNEE
     )).
 
 -spec resolve_token_spec(token_spec()) ->
-    {claims(), uac_authorizer_jwt:domains(), uac_authorizer_jwt:expiration()}.
+    claims().
 resolve_token_spec({destinations, DestinationId}) ->
-    Claims = #{},
     DomainRoles = #{
         ?DOMAIN => uac_acl:from_list([
             {[party, {destinations, DestinationId}], read},
             {[party, {destinations, DestinationId}], write}
         ])
     },
-    Expiration = {lifetime, ?DEFAULT_ACCESS_TOKEN_LIFETIME},
-    {Claims, DomainRoles, Expiration}.
-
+    #{
+        <<"exp">> => {lifetime, ?DEFAULT_ACCESS_TOKEN_LIFETIME},
+        <<"resource_access">> => DomainRoles
+    }.
 %%
 
 -spec get_operation_access(operation_id(), request_data()) ->
@@ -123,4 +121,9 @@ get_access_config() ->
     #{
         domain_name => ?DOMAIN,
         resource_hierarchy => get_resource_hierarchy()
+    }.
+
+get_verification_options() ->
+    #{
+        domains_to_decode => [?DOMAIN]
     }.
