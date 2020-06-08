@@ -47,7 +47,7 @@
   2},
  {<<"genlib">>,
   {git,"https://github.com/rbkmoney/genlib.git",
-       {ref,"9011407d47b81008a2d59bb58bb62865c754bcb3"}},
+       {ref,"54920e768a71f121304a5eda547ee60295398f3c"}},
   0},
  {<<"gproc">>,{pkg,<<"gproc">>,<<"0.8.0">>},1},
  {<<"gun">>,
