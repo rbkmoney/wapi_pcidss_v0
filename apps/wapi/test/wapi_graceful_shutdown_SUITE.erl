@@ -94,7 +94,6 @@ end_per_testcase(_Name, C) ->
 -spec shutdown_test(config()) -> test_return().
 
 shutdown_test(C) ->
-    Context = ?config(context, C),
     CardNumber = <<"4150399999000900">>,
     wapi_ct_helper:mock_services([
         {binbase, fun('Lookup', _) ->
@@ -106,28 +105,22 @@ shutdown_test(C) ->
             ('PutSession', _Args) -> {ok, ?PUT_SESSION_RESULT}
         end}
     ], C),
-    Bin        = ?BIN(CardNumber),
-    LastDigits = ?LAST_DIGITS(CardNumber),
-    {ok, #{
-        <<"bin">>        := Bin,
-        <<"lastDigits">> := LastDigits,
-        <<"paymentSystem">> := <<"visa">>
-    }} = wapi_client_payres:store_bank_card(Context, ?STORE_BANK_CARD_REQUEST(CardNumber)),
-    ok = spawn_workers(Context, self(), ?NUMBER_OF_WORKERS),
+    Token = get_token(),
+    ok = spawn_workers(Token, self(), ?NUMBER_OF_WORKERS),
     ok = timer:sleep(1000),
     ok = application:stop(wapi),
     ok = receive_loop(fun(Result) -> {ok, _} = Result end, ?NUMBER_OF_WORKERS, timer:seconds(20)),
-    ok = spawn_workers(Context, self(), ?NUMBER_OF_WORKERS),
-    ok = receive_loop(fun(Result) -> {error, econnrefused} = Result end, ?NUMBER_OF_WORKERS, timer:seconds(20)).
+    ok = spawn_workers(Token, self(), ?NUMBER_OF_WORKERS),
+    ok = receive_loop(fun(Result) -> {error, econnrefused} = Result end, ?NUMBER_OF_WORKERS, timer:seconds(20)),
+    ok.
 
 -spec request_interrupt_test(config()) ->
     _.
 request_interrupt_test(C) ->
-    Context = ?config(context, C),
     CardNumber = <<"4150399999000900">>,
     wapi_ct_helper:mock_services([
         {binbase, fun('Lookup', _) ->
-                ok = timer:sleep(2000),
+                ok = timer:sleep(20000),
                 {ok, ?BINBASE_LOOKUP_RESULT(<<"VISA">>)}
         end},
         {cds_storage, fun
@@ -135,18 +128,14 @@ request_interrupt_test(C) ->
             ('PutSession', _Args) -> {ok, ?PUT_SESSION_RESULT}
         end}
     ], C),
-    Bin        = ?BIN(CardNumber),
-    LastDigits = ?LAST_DIGITS(CardNumber),
-    {ok, #{
-        <<"bin">>        := Bin,
-        <<"lastDigits">> := LastDigits,
-        <<"paymentSystem">> := <<"visa">>
-    }} = wapi_client_payres:store_bank_card(Context, ?STORE_BANK_CARD_REQUEST(CardNumber)),
-    ok = spawn_workers(Context, self(), ?NUMBER_OF_WORKERS),
+    Token = get_token(),
+    ok = spawn_workers(Token, self(), ?NUMBER_OF_WORKERS),
     ok = timer:sleep(1000),
     ok = application:stop(wapi),
-    ok = receive_loop(fun({error, closed}) -> ok end, ?NUMBER_OF_WORKERS, timer:seconds(20)),
-    ok = spawn_workers(Context, self(), ?NUMBER_OF_WORKERS),
+    % the same receive loop matches on {error, closed} in capi, should it do so
+    % here as well? 504 seems moderately reasonable in this context, but hey
+    ok = receive_loop(fun({error, {invalid_response_code, 504}}) -> ok end, ?NUMBER_OF_WORKERS, timer:seconds(20)),
+    ok = spawn_workers(Token, self(), ?NUMBER_OF_WORKERS),
     ok = receive_loop(fun(Result) -> {error, econnrefused} = Result end, ?NUMBER_OF_WORKERS, timer:seconds(20)).
 
 %%
@@ -164,11 +153,22 @@ receive_loop(MatchFun, N, Timeout) ->
 
 spawn_workers(_, _, N) when N =< 0 ->
     ok;
-spawn_workers(Context, ParentPID, N) ->
-    erlang:spawn_link(fun() -> worker(Context, ParentPID) end),
-    spawn_workers(Context, ParentPID, N - 1).
+spawn_workers(Token, ParentPID, N) ->
+    erlang:spawn_link(fun() -> worker(Token, ParentPID) end),
+    spawn_workers(Token, ParentPID, N - 1).
 
-worker(Context, ParentPID) ->
+worker(Token, ParentPID) ->
+    Context = get_context(Token),
     CardNumber = <<"4150399999000900">>,
     Result = wapi_client_payres:store_bank_card(Context, ?STORE_BANK_CARD_REQUEST(CardNumber)),
     ParentPID ! {result, Result}.
+
+get_token() ->
+    wapi_ct_helper:issue_token([{[party], write}, {[party], read}], unlimited).
+
+get_context(Token) ->
+    Deadline = build_deadline(genlib_time:now()),
+    wapi_ct_helper:get_context(Token, #{}, Deadline).
+
+build_deadline(CurrentSeconds) ->
+    genlib_rfc3339:format_relaxed(genlib_time:add_hours(CurrentSeconds, 1), second).
