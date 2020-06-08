@@ -27,12 +27,12 @@ init([]) ->
     {LogicHandlers, LogicHandlerSpecs} = get_logic_handler_info(),
     HealthCheck = enable_health_logging(genlib_app:env(wapi, health_check, #{})),
     HealthRoutes = [{'_', [erl_health_handle:get_route(HealthCheck)]}],
-    SwaggerSpec = wapi_swagger_server:child_spec(HealthRoutes, LogicHandlers),
+    SwaggerSpecs = wapi_swagger_server:child_spec(HealthRoutes, LogicHandlers),
     UacConf = get_uac_config(),
     ok = uac:configure(UacConf),
     {ok, {
         {one_for_all, 0, 1},
-            [LechiffreSpec] ++ LogicHandlerSpecs ++ [SwaggerSpec]
+            [LechiffreSpec] ++ LogicHandlerSpecs ++ [SwaggerSpecs]
     }}.
 
 -spec get_logic_handler_info() -> {Handlers :: #{atom() => module()}, [Spec :: supervisor:child_spec()] | []} .
