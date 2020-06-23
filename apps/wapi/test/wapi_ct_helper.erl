@@ -13,7 +13,6 @@
 -export([issue_token/3]).
 -export([get_context/1]).
 -export([get_context/2]).
--export([get_context/3]).
 -export([get_keysource/2]).
 -export([start_mocked_service_sup/1]).
 -export([stop_mocked_service_sup/1]).
@@ -181,20 +180,6 @@ get_context(Token) ->
 
 get_context(Token, ExtraProperties) ->
     wapi_client_lib:get_context(?WAPI_URL, Token, 10000, ipv4, ExtraProperties).
-
--spec get_context(binary(), map(), binary()) ->
-    wapi_client_lib:context().
-
-get_context(Token, ExtraProperties, Deadline) ->
-    wapi_client_lib:get_context(
-        ?WAPI_URL,
-        Token,
-        10000,
-        ipv4,
-        ExtraProperties,
-        wapi_client_lib:default_event_handler(),
-        Deadline
-    ).
 
 -spec mock_services(_, _) ->
     _.
