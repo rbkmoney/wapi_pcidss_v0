@@ -8,6 +8,7 @@
 %% swag_server_privdoc_logic_handler callbacks
 -export([authorize_api_key/3]).
 -export([handle_request/4]).
+-export([map_error/2]).
 
 %% wapi_handler callbacks
 -export([process_request/4]).
@@ -21,6 +22,7 @@
 -type api_key() :: swag_server_privdoc:api_key().
 -type request_context() :: swag_server_privdoc:request_context().
 -type handler_opts() :: swag_server_privdoc:handler_opts(term()).
+-type error_type() :: swag_server_privdoc_logic_handler:error_type().
 
 %% API
 
@@ -121,3 +123,21 @@ mask(retiree_insurance_cert_number, #{<<"number">> := Number}) ->
 
     Mask = binary:replace(Rest2, ?PATTERN_DIGIT, <<"*">>, [global]),
     <<V1/binary, Mask/binary, V2/binary>>.
+
+-spec map_error(error_type(), swag_server_privdoc_validation:error()) -> swag_server_privdoc:error_reason().
+map_error(validation_error, Error) ->
+    Type = genlib:to_binary(maps:get(type, Error)),
+    Name = genlib:to_binary(maps:get(param_name, Error)),
+    Message =
+        case maps:get(description, Error, undefined) of
+            undefined ->
+                <<"Request parameter: ", Name/binary, ", error type: ", Type/binary>>;
+            Description ->
+                DescriptionBin = genlib:to_binary(Description),
+                <<"Request parameter: ", Name/binary, ", error type: ", Type/binary, ", description: ",
+                    DescriptionBin/binary>>
+        end,
+    jsx:encode(#{
+        <<"code">> => <<"invalidRequest">>,
+        <<"message">> => Message
+    }).
