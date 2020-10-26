@@ -9,7 +9,6 @@
 %% swag_server_payres_logic_handler callbacks
 -export([authorize_api_key/3]).
 -export([handle_request/4]).
--export([map_error/2]).
 
 %% wapi_handler callbacks
 -export([process_request/4]).
@@ -23,7 +22,6 @@
 -type api_key() :: swag_server_payres:api_key().
 -type request_context() :: swag_server_payres:request_context().
 -type handler_opts() :: swag_server_payres:handler_opts(term()).
--type error_type() :: swag_server_payres_logic_handler:error_type().
 
 %% API
 
@@ -238,21 +236,3 @@ parse_exp_date(ExpDate) when is_binary(ExpDate) ->
 
 service_call({ServiceName, Function, Args}, WoodyContext) ->
     wapi_woody_client:call_service(ServiceName, Function, Args, WoodyContext).
-
--spec map_error(error_type(), swag_server_payres_validation:error()) -> swag_server_payres:error_reason().
-map_error(validation_error, Error) ->
-    Type = genlib:to_binary(maps:get(type, Error)),
-    Name = genlib:to_binary(maps:get(param_name, Error)),
-    Message =
-        case maps:get(description, Error, undefined) of
-            undefined ->
-                <<"Request parameter: ", Name/binary, ", error type: ", Type/binary>>;
-            Description ->
-                DescriptionBin = genlib:to_binary(Description),
-                <<"Request parameter: ", Name/binary, ", error type: ", Type/binary, ", description: ",
-                    DescriptionBin/binary>>
-        end,
-    jsx:encode(#{
-        <<"code">> => <<"invalidRequest">>,
-        <<"message">> => Message
-    }).
