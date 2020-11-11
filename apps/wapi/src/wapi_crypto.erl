@@ -12,9 +12,8 @@
 
 -spec encrypt_bankcard_token(bank_card()) -> encrypted_token().
 encrypt_bankcard_token(BankCard) ->
-    EncryptionParams = create_encryption_params(),
     ThriftType = {struct, struct, {ff_proto_base_thrift, 'BankCard'}},
-    {ok, EncodedToken} = lechiffre:encode(ThriftType, BankCard, EncryptionParams),
+    {ok, EncodedToken} = lechiffre:encode(ThriftType, BankCard),
     TokenVersion = token_version(),
     <<TokenVersion/binary, ".", EncodedToken/binary>>.
 
@@ -36,10 +35,6 @@ decrypt_bankcard_token(Token) ->
 
 token_version() ->
     <<"v1">>.
-
-%% Delete this code after add improved lechiffre(del deterministic encryption)
-create_encryption_params() ->
-    #{iv => lechiffre:compute_iv(<<"">>)}.
 
 decrypt_token(EncryptedToken) ->
     ThriftType = {struct, struct, {ff_proto_base_thrift, 'BankCard'}},
