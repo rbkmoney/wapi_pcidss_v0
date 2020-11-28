@@ -4,8 +4,10 @@
 
 -type encrypted_token() :: binary().
 -type bank_card() :: ff_proto_base_thrift:'BankCard'().
+-type resource() :: bank_card().
 
 -export_type([encrypted_token/0]).
+-export_type([resource/0]).
 
 -export([encrypt_bankcard_token/1]).
 -export([decrypt_bankcard_token/1]).
@@ -18,9 +20,7 @@ encrypt_bankcard_token(BankCard) ->
     <<TokenVersion/binary, ".", EncodedToken/binary>>.
 
 -spec decrypt_bankcard_token(encrypted_token()) ->
-    unrecognized
-    | {ok, bank_card()}
-    | {error, lechiffre:decoding_error()}.
+    {ok, resource()} | unrecognized | {error, lechiffre:decoding_error()}.
 decrypt_bankcard_token(Token) ->
     Ver = token_version(),
     Size = byte_size(Ver),
