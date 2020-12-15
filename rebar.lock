@@ -44,7 +44,7 @@
   0},
  {<<"fistful_proto">>,
   {git,"git@github.com:rbkmoney/fistful-proto.git",
-       {ref,"e594df9ba3ba73a6b4d2b9948a727471fdc56e3b"}},
+       {ref,"03f620b54774f251a05ccab93146a425775ec018"}},
   0},
  {<<"folsom">>,
   {git,"https://github.com/folsom-project/folsom.git",
