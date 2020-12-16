@@ -91,4 +91,4 @@ decode_deadline(Deadline) ->
 
 -spec decode_resource_payload(resource_payload()) -> resource().
 decode_resource_payload({bank_card_payload, Payload}) ->
-  {bank_card, Payload#rst_BankCardPayload.bank_card}.
+    {bank_card, Payload#rst_BankCardPayload.bank_card}.
