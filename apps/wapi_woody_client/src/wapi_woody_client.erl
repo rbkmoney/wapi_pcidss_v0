@@ -16,7 +16,8 @@ call_service(ServiceName, Function, Args, Context) ->
     EventHandler = {scoper_woody_event_handler, EventHandlerOpts},
     call_service(ServiceName, Function, Args, Context, EventHandler).
 
--spec call_service(service_name(), woody:func(), woody:args(), woody_context:ctx(), woody:ev_handler()) -> woody:result().
+-spec call_service(service_name(), woody:func(), woody:args(), woody_context:ctx(), woody:ev_handler()) ->
+    woody:result().
 call_service(ServiceName, Function, Args, Context, EventHandler) ->
     {Url, Service} = get_service_spec(ServiceName),
     Request = {Service, Function, Args},
