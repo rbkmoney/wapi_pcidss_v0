@@ -99,7 +99,7 @@ store_bank_card_success_test(C) ->
     {ok, #{
         <<"bin">> := Bin,
         <<"lastDigits">> := LastDigits,
-        <<"paymentSystem">> := <<"visa">>
+        <<"paymentSystem">> := <<"VISA">>
     }} = call_store_bank_card(CardNumber, C).
 
 -spec store_bank_card_expired_test(config()) -> test_return().
@@ -165,7 +165,7 @@ store_pan_only_bank_card_ok_test(C) ->
     {ok, #{
         <<"bin">> := <<"415039">>,
         <<"lastDigits">> := <<"0900">>,
-        <<"paymentSystem">> := <<"visa">>
+        <<"paymentSystem">> := <<"VISA">>
     }} = call_store_bank_card(CardNumber, C).
 
 -spec get_bank_card_success_test(config()) -> test_return().
@@ -180,7 +180,7 @@ get_bank_card_success_test(C) ->
         <<"bin">> := Bin,
         <<"lastDigits">> := LastDigits,
         <<"token">> := Token,
-        <<"paymentSystem">> := <<"visa">>
+        <<"paymentSystem">> := <<"VISA">>
     }} = wapi_client_payres:get_bank_card(?config(context, C), Token).
 
 -spec store_privdoc_success_test(config()) -> test_return().

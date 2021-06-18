@@ -118,12 +118,14 @@ decrypt_token(Token) ->
                 end,
             LastDigits = wapi_utils:get_last_pan_digits(BankCard#'BankCard'.masked_pan),
             Bin = BankCard#'BankCard'.bin,
-            #{
-                <<"token">> => Token,
-                <<"bin">> => Bin,
-                <<"lastDigits">> => LastDigits,
-                <<"paymentSystem">> => genlib:to_binary(BankCard#'BankCard'.payment_system_deprecated)
-            };
+            genlib_map:compact(
+                #{
+                    <<"token">> => Token,
+                    <<"bin">> => Bin,
+                    <<"lastDigits">> => LastDigits,
+                    <<"paymentSystem">> => BankCard#'BankCard'.payment_system
+                }
+            );
         {error, {decryption_failed, _} = Error} ->
             logger:warning("Resource token decryption failed: ~p", [Error]),
             erlang:error(badarg)
@@ -270,7 +272,7 @@ decode_bank_card(BankCard, AuthData) ->
     #{
         bin := Bin,
         last_digits := LastDigits,
-        payment_system_deprecated := PaymentSystem
+        payment_system := PaymentSystem
     } = BankCard,
     BankCardThrift = to_thrift(bank_card, BankCard),
     TokenValidUntil = wapi_utils:deadline_from_timeout(resource_token_lifetime()),
@@ -278,7 +280,7 @@ decode_bank_card(BankCard, AuthData) ->
     genlib_map:compact(#{
         <<"token">> => EncryptedToken,
         <<"bin">> => Bin,
-        <<"paymentSystem">> => genlib:to_binary(PaymentSystem),
+        <<"paymentSystem">> => PaymentSystem,
         <<"lastDigits">> => LastDigits,
         <<"authData">> => decode_auth_data(AuthData),
         <<"validUntil">> => decode_deadline(TokenValidUntil)
