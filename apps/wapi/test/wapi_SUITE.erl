@@ -224,7 +224,7 @@ decrypt_resource_v2_test(_C) ->
             token = ?STRING,
             bin = ?BIN(<<"4150399999000900">>),
             masked_pan = ?LAST_DIGITS(<<"4150399999000900">>),
-            payment_system = visa,
+            payment_system_deprecated = visa,
             exp_date = #'BankCardExpDate'{month = 1, year = 2021},
             cardholder_name = ?STRING
         }},
