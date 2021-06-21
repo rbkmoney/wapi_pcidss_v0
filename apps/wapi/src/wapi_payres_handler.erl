@@ -122,8 +122,7 @@ decrypt_token(Token) ->
                 #{
                     <<"token">> => Token,
                     <<"bin">> => Bin,
-                    <<"lastDigits">> => LastDigits,
-                    <<"paymentSystem">> => BankCard#'BankCard'.payment_system
+                    <<"lastDigits">> => LastDigits
                 }
             );
         {error, {decryption_failed, _} = Error} ->
@@ -271,8 +270,7 @@ to_thrift(session_data, undefined) ->
 decode_bank_card(BankCard, AuthData) ->
     #{
         bin := Bin,
-        last_digits := LastDigits,
-        payment_system := PaymentSystem
+        last_digits := LastDigits
     } = BankCard,
     BankCardThrift = to_thrift(bank_card, BankCard),
     TokenValidUntil = wapi_utils:deadline_from_timeout(resource_token_lifetime()),
@@ -280,7 +278,6 @@ decode_bank_card(BankCard, AuthData) ->
     genlib_map:compact(#{
         <<"token">> => EncryptedToken,
         <<"bin">> => Bin,
-        <<"paymentSystem">> => PaymentSystem,
         <<"lastDigits">> => LastDigits,
         <<"authData">> => decode_auth_data(AuthData),
         <<"validUntil">> => decode_deadline(TokenValidUntil)
