@@ -211,14 +211,14 @@ payment_system(BankInfo) ->
 merge_data(CardData, ExtraCardData, undefined) ->
     maps:merge(convert_card_data(CardData), ExtraCardData);
 merge_data(CardData, ExtraCardData, #cds_SessionData{auth_data = AuthData}) ->
-    CVC = get_cvv_from_session_data(AuthData),
+    CVC = get_cvc_from_session_data(AuthData),
     CardDataMap0 = convert_card_data(CardData),
     CardDataMap1 = maps:merge(CardDataMap0, ExtraCardData),
     CardDataMap1#{cvc => maybe_undefined(CVC)}.
 
-get_cvv_from_session_data({card_security_code, AuthData}) ->
+get_cvc_from_session_data({card_security_code, AuthData}) ->
     AuthData#cds_CardSecurityCode.value;
-get_cvv_from_session_data(_) ->
+get_cvc_from_session_data(_) ->
     undefined.
 
 convert_card_data(CardData) ->
